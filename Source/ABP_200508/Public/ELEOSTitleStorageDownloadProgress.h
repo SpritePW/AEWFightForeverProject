@@ -1,0 +1,23 @@
+#pragma once
+#include "CoreMinimal.h"
+#include "UObject/Object.h"
+#include "ELEOSTitleStorageDownloadProgress.generated.h"
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnCompleteDownloadFiles);
+
+UCLASS(Blueprintable)
+class UELEOSTitleStorageDownloadProgress : public UObject {
+    GENERATED_BODY()
+public:
+private:
+    UPROPERTY(BlueprintReadWrite, EditAnywhere, meta=(AllowPrivateAccess=true))
+    TMap<FString, float> FileDownloadProgress;
+    
+public:
+    UPROPERTY(BlueprintAssignable, BlueprintReadWrite, EditAnywhere, meta=(AllowPrivateAccess=true))
+    FOnCompleteDownloadFiles OnCompleteDownloadFilesDelegate;
+    
+    UELEOSTitleStorageDownloadProgress();
+
+};
+

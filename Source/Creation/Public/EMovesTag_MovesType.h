@@ -1,0 +1,17 @@
+#pragma once
+#include "CoreMinimal.h"
+#include "EMovesTag_MovesType.generated.h"
+
+UENUM(BlueprintType)
+enum class EMovesTag_MovesType : uint8 {
+    None = 0,
+    MV_DDT = 1,
+    MV_Powerbomb,
+    MV_Hurricanerana = 4,
+    MV_Suplex = 8,
+    MV_Slam = 16,
+    MV_Drop = 32,
+    MV_Piledriver = 64,
+    MV_Backbreaker = 128,
+};
+

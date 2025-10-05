@@ -1,0 +1,13 @@
+#pragma once
+#include "CoreMinimal.h"
+#include "EMovesTag_DamagePart.generated.h"
+
+UENUM(BlueprintType)
+enum class EMovesTag_DamagePart : uint8 {
+    None = 0,
+    DP_Head = 1,
+    DP_Body,
+    DP_Arms = 4,
+    DP_Legs = 8,
+};
+

@@ -1,0 +1,14 @@
+#pragma once
+#include "CoreMinimal.h"
+#include "EEditConditionBit.generated.h"
+
+UENUM(BlueprintType)
+enum class EEditConditionBit : uint8 {
+    None = 0,
+    BaseBody = 1,
+    Ring,
+    Entrance = 4,
+    Plain = 8,
+    Match = 6,
+};
+

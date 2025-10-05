@@ -1,0 +1,10 @@
+Saved/
+Intermediate/
+obj/
+Binaries/
+
+!/Intermediate/ScriptModules/
+
+.vs
+
+/*.sln

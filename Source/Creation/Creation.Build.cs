@@ -1,0 +1,18 @@
+using UnrealBuildTool;
+
+public class Creation : ModuleRules {
+    public Creation(ReadOnlyTargetRules Target) : base(Target) {
+        PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+        bLegacyPublicIncludePaths = false;
+        ShadowVariableWarningLevel = WarningLevel.Warning;
+        
+        PublicDependencyModuleNames.AddRange(new string[] {
+            "Core",
+            "CoreUObject",
+            "ELITE_Core",
+            "ELITE_Game",
+            "Engine",
+            "DeveloperSettings"
+        });
+    }
+}
