@@ -17,6 +17,7 @@ bool FTableRowName::operator!=(const  FTableRowName& Other) const
 {
     return !Equals(Other);
 }
+
 bool FTableRowName::Equals(const  FTableRowName& Other) const
 {
     return Name == Other.Name;

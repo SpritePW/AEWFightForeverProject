@@ -20,14 +20,16 @@ public:
     
     FELMoves_Finisher_Part();
 
-    bool operator==(const FELMoves_Finisher_Part& Other) const {
-        return Type == Other.Type && RSDir == Other.RSDir && MovesIndex == Other.MovesIndex;
-    }
+    FELMoves_Finisher_Part(const FELMoves_Finisher_Part& Other);
+
+    bool operator==(const FELMoves_Finisher_Part& Other) const;
+
+    bool operator!=(const  FELMoves_Finisher_Part& Other) const;
+
+    bool Equals(const  FELMoves_Finisher_Part& Other) const;
 };
 
 FORCEINLINE uint32 GetTypeHash(const FELMoves_Finisher_Part& Key) {
-    uint32 Hash = ::GetTypeHash(static_cast<uint8>(Key.Type));
-    Hash = HashCombine(Hash, ::GetTypeHash(static_cast<uint8>(Key.RSDir)));
-    Hash = HashCombine(Hash, ::GetTypeHash(Key.MovesIndex));
+    const uint32 Hash = FCrc::MemCrc32(&Key, sizeof(FELMoves_Finisher_Part));
     return Hash;
 }
