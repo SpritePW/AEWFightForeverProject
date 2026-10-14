@@ -23,5 +23,6 @@ FGameplayCameraParam::FGameplayCameraParam() {
     this->UpdateLocationBufferMaxRate = 0.00f;
     this->TargetLocationUpdateMargin = 0.00f;
     this->UseForCameraChangeDuration = 0.00f;
+    this->TargetOffset = FVector::ZeroVector;
 }
 

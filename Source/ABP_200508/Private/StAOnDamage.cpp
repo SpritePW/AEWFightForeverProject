@@ -17,5 +17,6 @@ FStAOnDamage::FStAOnDamage() {
     this->ChestDamage = false;
     this->Reverse = false;
     this->AttackDir = EAOnDamageAttackDir_N::Front;
+    this->DamageReactionVector = FVector::ZeroVector;
 }
 

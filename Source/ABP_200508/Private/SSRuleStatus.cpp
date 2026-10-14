@@ -3,5 +3,6 @@
 FSSRuleStatus::FSSRuleStatus() {
     this->ScheduleId = 0;
     this->Enabled = false;
+    this->EventEndDateTime = FDateTime(0);
 }
 

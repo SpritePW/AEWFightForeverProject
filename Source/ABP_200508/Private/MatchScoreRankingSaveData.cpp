@@ -5,5 +5,6 @@ FMatchScoreRankingSaveData::FMatchScoreRankingSaveData() {
     this->RankingType = EMatchScoreRankingsType::NONE;
     this->StarNum = 0.00f;
     this->OptionValue = 0;
+    this->DateTime = FDateTime(0);
 }
 

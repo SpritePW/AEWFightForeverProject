@@ -23,6 +23,7 @@
 #include "AssetTypeActions_SoundAtomCueSheet.h"
 #include "AssetTypeActions_AtomAudioVolumeSettings.h"
 #include "AssetTypeActions_Atom3dRegion.h"
+#include "AssetTypeActions_ManaAsset.h"
 #include "AtomComponentBroker.h"
 #include "CriWareEditorSettings.h"
 #include "ThumbnailRendering/SoundAtomCueThumbnailRenderer.h"
@@ -409,6 +410,10 @@ void FCriWareEditorModule::StartupModule()
 	RegisterAssetTypeActions(AssetTools, MakeShareable(new FAssetTypeActions_SoundAtomCue));
 	RegisterAssetTypeActions(AssetTools, MakeShareable(new FAssetTypeActions_AtomAudioVolumeSettings));
 	RegisterAssetTypeActions(AssetTools, MakeShareable(new FAssetTypeActions_Atom3dRegion));
+
+	Sofdec2AssetCategoryBit = AssetTools.RegisterAdvancedAssetCategory(FName(TEXT("Sofdec2")), LOCTEXT("Sofdec2AssetCategory", "Sofdec2"));
+	RegisterAssetTypeActions(AssetTools, MakeShareable(new FAssetTypeActions_FileManaMovie(Sofdec2AssetCategoryBit)));
+	RegisterAssetTypeActions(AssetTools, MakeShareable(new FAssetTypeActions_ManaTexture(Sofdec2AssetCategoryBit)));
 
 #if !defined(CRIWARE_UE4_LE)	/* <cri_delete_if_LE> */
 #endif	/* </cri_delete_if_LE> */

@@ -2,5 +2,6 @@
 
 FBuildBodyNodeScale::FBuildBodyNodeScale() {
     this->Scale = 0.00f;
+    this->Ratio = FVector::ZeroVector;
 }
 

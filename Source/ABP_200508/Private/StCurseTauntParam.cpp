@@ -11,5 +11,6 @@ FStCurseTauntParam::FStCurseTauntParam() {
     this->HudDisplayDuration = 0.00f;
     this->CurseGroggyTime = 0.00f;
     this->UnlockID = 0;
+    this->AnimStartOffset = FVector::ZeroVector;
 }
 

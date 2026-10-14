@@ -10,5 +10,9 @@ FSSDamageEvent::FSSDamageEvent() {
     this->HitDirMode = ESSAttackHitDirMode::Default;
     this->DisableReaction = false;
     this->LocalEffective = false;
+    this->AttackLocation = FVector::ZeroVector;
+    this->AttackDirection = FVector::ZeroVector;
+    this->BlowVector = FVector::ZeroVector;
+    this->ApproximateHitCollisionLocation = FVector::ZeroVector;
 }
 

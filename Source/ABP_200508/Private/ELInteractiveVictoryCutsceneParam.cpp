@@ -6,5 +6,7 @@ FELInteractiveVictoryCutsceneParam::FELInteractiveVictoryCutsceneParam() {
     this->RampX = 0.00f;
     this->TotalDamage = 0.00f;
     this->CaptureDelayTimeForTaunt = 0.00f;
+    this->EntranceCameraLocation = FVector::ZeroVector;
+    this->EntranceCameraRotation = FRotator::ZeroRotator;
 }
 

@@ -3,5 +3,6 @@
 FPartIKInfo::FPartIKInfo() {
     this->AttachTarget = NULL;
     this->AttachTime = 0.00f;
+    this->AttachLocation = FVector::ZeroVector;
 }
 

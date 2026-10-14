@@ -2,7 +2,7 @@
 #include "CoreMinimal.h"
 #include "EMoviePlayerEvent.generated.h"
 
-UENUM(BlueprintType)
+UENUM(BlueprintType, meta=(ScriptName="MoviePlayerEventType"))
 enum class EMoviePlayerEvent : uint8 {
     Opened,
     OpenFailed,

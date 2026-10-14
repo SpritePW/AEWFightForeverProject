@@ -17,5 +17,6 @@ FSSDamageResult::FSSDamageResult() {
     this->ForceKoDamage = false;
     this->ForceDeadDamage = false;
     this->DetachVehicle = false;
+    this->BlowVector = FVector::ZeroVector;
 }
 

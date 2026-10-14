@@ -2,7 +2,7 @@
 #include "CoreMinimal.h"
 #include "EditPartsSlot.generated.h"
 
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta=(ScriptName="EditPartsSlotData"))
 struct CREATION_API FEditPartsSlot {
     GENERATED_BODY()
 public:

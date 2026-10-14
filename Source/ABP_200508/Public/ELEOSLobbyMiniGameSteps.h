@@ -4,7 +4,7 @@
 #include "LobbyPacketBase.h"
 #include "ELEOSLobbyMiniGameSteps.generated.h"
 
-UCLASS(Blueprintable)
+UCLASS(Blueprintable, meta=(ScriptName="ELEOSLobbyMiniGameStepsPacket"))
 class UELEOSLobbyMiniGameSteps : public ULobbyPacketBase {
     GENERATED_BODY()
 public:

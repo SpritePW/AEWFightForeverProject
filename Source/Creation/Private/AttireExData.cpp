@@ -20,5 +20,7 @@ FAttireExData::FAttireExData() {
     this->bApplyPatternTextureChangeColorToAttire = false;
     this->AttirePatternMaskTexture = NULL;
     this->bApplyDarkSkinModeToAttire = false;
+    this->LeftEyeColor = FLinearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    this->RightEyeColor = FLinearColor(0.0f, 0.0f, 0.0f, 0.0f);
 }
 

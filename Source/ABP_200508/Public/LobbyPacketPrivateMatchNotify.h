@@ -5,7 +5,7 @@
 #include "LobbyPacketBase.h"
 #include "LobbyPacketPrivateMatchNotify.generated.h"
 
-UCLASS(Blueprintable)
+UCLASS(Blueprintable, meta=(ScriptName="LobbyPacketPrivateMatchNotifyPacket"))
 class ULobbyPacketPrivateMatchNotify : public ULobbyPacketBase {
     GENERATED_BODY()
 public:

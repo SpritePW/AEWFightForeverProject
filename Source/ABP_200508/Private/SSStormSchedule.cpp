@@ -6,5 +6,7 @@ FSSStormSchedule::FSSStormSchedule() {
     this->Duration = 0.00f;
     this->startRadius = 0.00f;
     this->endRadius = 0.00f;
+    this->startLocation = FVector::ZeroVector;
+    this->endLocation = FVector::ZeroVector;
 }
 
