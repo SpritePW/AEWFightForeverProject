@@ -1,0 +1,20 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "AEW Edit Part Maker",
+	"Description": "Makes new CAW parts for AEW Fight Forever: creates the WA_ asset, the DT_EditParts_New row and a unique default-unlocked row in DT_UnlockableItemParam_WrestlerParts, with ID and clash checks.",
+	"Category": "AEW Fight Forever",
+	"CreatedBy": "",
+	"EngineVersion": "4.27.0",
+	"CanContainContent": false,
+	"IsBetaVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "AEWEditPartMaker",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
+		}
+	]
+}
