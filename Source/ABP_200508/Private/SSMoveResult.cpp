@@ -7,5 +7,7 @@ FSSMoveResult::FSSMoveResult() {
     this->GoodMove = false;
     this->Timestamp = 0.00f;
     this->MovementBaseActor = NULL;
+    this->BottomLocation = FVector::ZeroVector;
+    this->Rotation = FRotator::ZeroRotator;
 }
 

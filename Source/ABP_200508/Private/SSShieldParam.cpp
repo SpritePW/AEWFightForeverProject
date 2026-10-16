@@ -6,5 +6,7 @@ FSSShieldParam::FSSShieldParam() {
     this->Durability = 0;
     this->SkeletalMesh = NULL;
     this->IconImage = NULL;
+    this->AttachLocation = FVector::ZeroVector;
+    this->AttachRotation = FRotator::ZeroRotator;
 }
 

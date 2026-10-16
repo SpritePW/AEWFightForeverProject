@@ -2,5 +2,6 @@
 
 FSSSyncStatusForWatch_Replicated::FSSSyncStatusForWatch_Replicated() {
     this->WatchTarget = NULL;
+    this->CameraDirection = FVector::ZeroVector;
 }
 

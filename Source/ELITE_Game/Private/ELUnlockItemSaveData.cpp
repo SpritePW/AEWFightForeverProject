@@ -8,5 +8,6 @@ FELUnlockItemSaveData::FELUnlockItemSaveData() {
     this->IsFavorite = false;
     this->Stocked = false;
     this->IsNewlyAvailable = false;
+    this->StockedTimeStamp = FDateTime(0);
 }
 

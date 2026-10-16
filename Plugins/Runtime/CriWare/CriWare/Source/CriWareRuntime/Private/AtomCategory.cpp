@@ -1,59 +1,202 @@
+﻿/****************************************************************************
+ *
+ * CRI Middleware SDK
+ *
+ * Copyright (c) 2016-2017 CRI Middleware Co., Ltd.
+ *
+ * Library  : CRIWARE plugin for Unreal Engine 4
+ * Module   : Atom Category
+ * File     : AtomCategory.cpp
+ *
+ ****************************************************************************/
+
+/***************************************************************************
+ *      インクルードファイル
+ *      Include files
+ ***************************************************************************/
+/* モジュールヘッダ */
 #include "AtomCategory.h"
 
-UAtomCategory::UAtomCategory() {
+/* CRIWAREプラグインヘッダ */
+#include "CriWareRuntimePrivatePCH.h"
+
+/***************************************************************************
+ *      定数マクロ
+ *      Macro Constants
+ ***************************************************************************/
+#define LOCTEXT_NAMESPACE "AtomCategory"
+
+/***************************************************************************
+ *      処理マクロ
+ *      Macro Functions
+ ***************************************************************************/
+
+/***************************************************************************
+ *      データ型宣言
+ *      Data Type Declarations
+ ***************************************************************************/
+
+/***************************************************************************
+ *      変数宣言
+ *      Prototype Variables
+ ***************************************************************************/
+
+/***************************************************************************
+ *      クラス宣言
+ *      Prototype Classes
+ ***************************************************************************/
+
+/***************************************************************************
+ *      関数宣言
+ *      Prototype Functions
+ ***************************************************************************/
+ /* CRI ADX2 SDK の構造体からUE4用の構造体に変換 */
+static void ConvertAisacInfo(const CriAtomExAisacInfo & from, FAtomAisacInfo & to);
+
+/***************************************************************************
+ *      変数定義
+ *      Variable Definition
+ ***************************************************************************/
+
+/***************************************************************************
+ *      クラス定義
+ *      Class Definition
+ ***************************************************************************/
+ /* カテゴリボリュームの設定 */
+void UAtomCategory::SetVolumeByName(FString CategoryName, float Volume)
+{
+	criAtomExCategory_SetVolumeByName(TCHAR_TO_UTF8(*CategoryName), Volume);
 }
 
-void UAtomCategory::StopByName(const FString& CategoryName) {
+/* カテゴリボリュームの取得 */
+float UAtomCategory::GetVolumeByName(FString CategoryName)
+{
+	return criAtomExCategory_GetVolumeByName(TCHAR_TO_UTF8(*CategoryName));
 }
 
-void UAtomCategory::SetVolumeByName(const FString& CategoryName, float Volume) {
+/* カテゴリのポーズ／ポーズ解除 */
+void UAtomCategory::PauseByName(FString CategoryName, bool bPause)
+{
+	criAtomExCategory_PauseByName(TCHAR_TO_UTF8(*CategoryName), (CriBool)bPause);
 }
 
-void UAtomCategory::SetMute(const FString& CategoryName, bool IsMute) {
+/* カテゴリがポーズ状態の取得 */
+bool UAtomCategory::IsPausedByName(FString CategoryName)
+{
+	CriBool result = criAtomExCategory_IsPausedByName(TCHAR_TO_UTF8(*CategoryName));
+	return (result != CRI_FALSE);
 }
 
-void UAtomCategory::SetAisacControlByName(const FString& CategoryName, const FString& AisacName, float Value) {
+/* 任意のIDのカテゴリの全てのAISACコントロールをリセット */
+bool UAtomCategory::ResetAllAisacControlById(int32 CategoryId)
+{
+	return criAtomExCategory_ResetAllAisacControlById(static_cast<CriAtomExCategoryId>(CategoryId)) == CRI_TRUE;
 }
 
-bool UAtomCategory::ResetAllAisacControlByName(const FString& CategoryName) {
-    return false;
+/* 任意の名前のカテゴリの全てのAISACコントロールをリセット */
+bool UAtomCategory::ResetAllAisacControlByName(FString CategoryName)
+{
+	return criAtomExCategory_ResetAllAisacControlByName(TCHAR_TO_UTF8(*CategoryName)) == CRI_TRUE;
 }
 
-bool UAtomCategory::ResetAllAisacControlById(int32 CategoryID) {
-    return false;
+/* ID指定でカテゴリにアタッチされているAISAC数を取得 */
+int32 UAtomCategory::GetNumAttachedAisacsById(int32 CategoryId)
+{
+	return criAtomExCategory_GetNumAttachedAisacsById(static_cast<CriAtomExCategoryId>(CategoryId));
 }
 
-void UAtomCategory::PauseByName(const FString& CategoryName, bool bPause) {
+/* 名前指定でカテゴリにアタッチされているAISAC数を取得 */
+int32 UAtomCategory::GetNumAttachedAisacsByName(FString CategoryName)
+{
+	return criAtomExCategory_GetNumAttachedAisacsByName(TCHAR_TO_UTF8(*CategoryName));
 }
 
-bool UAtomCategory::IsPausedByName(const FString& CategoryName) {
-    return false;
+/* ID指定でカテゴリにアタッチされているAISACの情報を取得 */
+void UAtomCategory::GetAttachedAisacInfoById(int32 CategoryId, int32 AisacAttachedIndex, bool & IsSuccess, FAtomAisacInfo & AisacInfo)
+{
+	CriAtomExAisacInfo AisacInfoBasic;
+
+	IsSuccess = criAtomExCategory_GetAttachedAisacInfoById(
+		static_cast<CriAtomExCategoryId>(CategoryId),
+		static_cast<CriSint32>(AisacAttachedIndex),
+		&AisacInfoBasic) != 0;
+
+	if (IsSuccess) {
+		ConvertAisacInfo(AisacInfoBasic, AisacInfo);
+	}
 }
 
-float UAtomCategory::GetVolumeByName(const FString& CategoryName) {
-    return 0.0f;
+/* 名前指定でカテゴリにアタッチされているAISACの情報を取得 */
+void UAtomCategory::GetAttachedAisacInfoByName(FString CategoryName, int32 AisacAttachedIndex, bool & IsSuccess, FAtomAisacInfo & AisacInfo)
+{
+	CriAtomExAisacInfo AisacInfoBasic;
+
+	IsSuccess = criAtomExCategory_GetAttachedAisacInfoByName(
+		TCHAR_TO_UTF8(*CategoryName),
+		static_cast<CriSint32>(AisacAttachedIndex),
+		&AisacInfoBasic) != 0;
+
+	if (IsSuccess) {
+		ConvertAisacInfo(AisacInfoBasic, AisacInfo);
+	}
 }
 
-int32 UAtomCategory::GetNumAttachedAisacsByName(const FString& CategoryName) {
-    return 0;
+/* CRI ADX2 SDK の構造体からUE4用の構造体に変換 */
+static void ConvertAisacInfo(const CriAtomExAisacInfo & from, FAtomAisacInfo & to)
+{
+	to.Name = from.name;
+	to.DefaultControlFlag = (from.default_control_flag == CRI_TRUE);
+	to.DefaultControlValue = from.default_control_value;
+	to.ControlId = static_cast<int32>(from.control_id);
+	to.ControlName = from.control_name;
 }
 
-int32 UAtomCategory::GetNumAttachedAisacsById(int32 CategoryID) {
-    return 0;
+/* カテゴリAISACの設定 */
+void UAtomCategory::SetAisacControlByName(FString CategoryName, FString AisacName, float Value)
+{
+	criAtomExCategory_SetAisacControlByName(TCHAR_TO_UTF8(*CategoryName), TCHAR_TO_UTF8(*AisacName), Value);
 }
 
-float UAtomCategory::GetCurrentAisacControlValueByName(const FString& CategoryName, const FString& AisacControlName) {
-    return 0.0f;
+/* ID指定でカテゴリAISACコントロールの現在値を取得 */
+float UAtomCategory::GetCurrentAisacControlValueById(
+	int32 CategoryId,
+	int32 AisacControlId)
+{
+	float value = 1.0f;
+	criAtomExCategory_GetCurrentAisacControlValueById(
+		static_cast<CriAtomExCategoryId>(CategoryId),
+		static_cast<CriAtomExAisacControlId>(AisacControlId),
+		&value);
+	return value;
 }
 
-float UAtomCategory::GetCurrentAisacControlValueById(int32 CategoryID, int32 AisacControlID) {
-    return 0.0f;
+/* 名前指定でカテゴリAISACコントロールの現在値を取得 */
+float UAtomCategory::GetCurrentAisacControlValueByName(
+	FString CategoryName,
+	FString AisacControlName)
+{
+	float value;
+	criAtomExCategory_GetCurrentAisacControlValueByName(
+		TCHAR_TO_UTF8(*CategoryName),
+		TCHAR_TO_UTF8(*AisacControlName),
+		&value);
+	return value;
 }
 
-void UAtomCategory::GetAttachedAisacInfoByName(const FString& CategoryName, int32 AisacAttachedIndex, bool& IsSuccess, FAtomAisacInfo& AisacInfo) {
+void UAtomCategory::StopByName(FString CategoryName)
+{
+	criAtomExCategory_StopByName(TCHAR_TO_UTF8(*CategoryName));
 }
 
-void UAtomCategory::GetAttachedAisacInfoById(int32 CategoryID, int32 AisacAttachedIndex, bool& IsSuccess, FAtomAisacInfo& AisacInfo) {
+void UAtomCategory::SetMute(FString CategoryName, bool IsMute)
+{
+	criAtomExCategory_MuteByName(TCHAR_TO_UTF8(*CategoryName), IsMute ? CRI_TRUE : CRI_FALSE);
 }
 
+/***************************************************************************
+ *      関数定義
+ *      Function Definition
+ ***************************************************************************/
+#undef LOCTEXT_NAMESPACE
 
+/* --- end of file --- */

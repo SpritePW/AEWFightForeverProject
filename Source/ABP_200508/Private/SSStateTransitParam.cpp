@@ -19,5 +19,8 @@ FSSStateTransitParam::FSSStateTransitParam() {
     this->DisableBlendOut = false;
     this->LandingStarted = false;
     this->SkipAutonomousRestart = false;
+    this->StartedBottomLocation = FVector::ZeroVector;
+    this->StartedVelocity = FVector::ZeroVector;
+    this->IdealLocation = FVector::ZeroVector;
 }
 

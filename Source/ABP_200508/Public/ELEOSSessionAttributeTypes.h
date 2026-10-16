@@ -4,7 +4,7 @@
 #include "EELEOSSessionAttributeTypes.h"
 #include "ELEOSSessionAttributeTypes.generated.h"
 
-UCLASS(Blueprintable)
+UCLASS(Blueprintable, meta=(ScriptName="ELEOSSessionAttributeTypesObject"))
 class UELEOSSessionAttributeTypes : public UObject {
     GENERATED_BODY()
 public:

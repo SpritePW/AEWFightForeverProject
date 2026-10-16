@@ -16,5 +16,6 @@ FELMatchRecordsProfileInfo::FELMatchRecordsProfileInfo() {
     this->LastBattleRoyalWinner = EWrestlerID_N::None;
     this->TotalDistance = 0.00f;
     this->WiningStreakForOnline = 0;
+    this->LastEnterDateForOnline = FDateTime(0);
 }
 

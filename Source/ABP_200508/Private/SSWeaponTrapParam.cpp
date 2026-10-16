@@ -9,5 +9,7 @@ FSSWeaponTrapParam::FSSWeaponTrapParam() {
     this->PutHeightOffset = 0.00f;
     this->PutHeightLimitTop = 0.00f;
     this->PutHeightLimitBottom = 0.00f;
+    this->AttachLocationOffset = FVector::ZeroVector;
+    this->AttachRotation = FRotator::ZeroRotator;
 }
 

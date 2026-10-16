@@ -4,5 +4,6 @@ FFootIKState::FFootIKState() {
     this->bIK = false;
     this->bAttach = false;
     this->BlendRate = 0.00f;
+    this->Position = FVector::ZeroVector;
 }
 

@@ -6,5 +6,7 @@ FELHighlightReplayParam::FELHighlightReplayParam() {
     this->ArmLengthOffset = 0.00f;
     this->SpringArmPitch = 0.00f;
     this->SpecialMovesType = ESpecialMovesType::None;
+    this->Offset = FVector::ZeroVector;
+    this->CameraLocation = FVector::ZeroVector;
 }
 

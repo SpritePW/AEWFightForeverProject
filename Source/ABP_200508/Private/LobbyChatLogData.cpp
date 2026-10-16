@@ -3,5 +3,6 @@
 FLobbyChatLogData::FLobbyChatLogData() {
     this->Sticker = 0;
     this->Platform = EPlatformType::PLATFORM_TYPE_WINDOWS;
+    this->DateTime = FDateTime(0);
 }
 

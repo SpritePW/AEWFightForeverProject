@@ -7,5 +7,8 @@ FELEntranceCutsceneBGModelData::FELEntranceCutsceneBGModelData() {
     this->LightIndexForCapture = 0;
     this->WaitTimeForCapture = 0.00f;
     this->UnlockItemId = 0;
+    this->Location = FVector::ZeroVector;
+    this->Rotation = FRotator::ZeroRotator;
+    this->Scale = FVector::ZeroVector;
 }
 

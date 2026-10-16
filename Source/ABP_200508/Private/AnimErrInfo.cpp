@@ -6,5 +6,6 @@ FAnimErrInfo::FAnimErrInfo() {
     this->PreviewIdx = 0;
     this->DistanceOffset = 0.00f;
     this->AllOffset = 0.00f;
+    this->DateTime = FDateTime(0);
 }
 

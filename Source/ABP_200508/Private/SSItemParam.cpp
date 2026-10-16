@@ -10,5 +10,7 @@ FSSItemParam::FSSItemParam() {
     this->TimeToTrigger = 0.00f;
     this->ScaleWhenDrop = 0.00f;
     this->IconImage = NULL;
+    this->AttachLocation = FVector::ZeroVector;
+    this->AttachRotation = FRotator::ZeroRotator;
 }
 

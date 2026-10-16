@@ -5,5 +5,8 @@ FELEntranceCutsceneBGModelInfo::FELEntranceCutsceneBGModelInfo() {
     this->AnimSequence = NULL;
     this->StaticMesh = NULL;
     this->Blueprint = NULL;
+    this->Location = FVector::ZeroVector;
+    this->Rotation = FRotator::ZeroRotator;
+    this->Scale = FVector::ZeroVector;
 }
 

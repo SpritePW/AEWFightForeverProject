@@ -8,5 +8,8 @@ FSSWeaponParam::FSSWeaponParam() {
     this->Attack2MoveId = 0;
     this->ScaleWhenDrop = 0.00f;
     this->IconImage = NULL;
+    this->AttachLocation = FVector::ZeroVector;
+    this->AttachRotation = FRotator::ZeroRotator;
+    this->RelativeLocationWhenDrop = FVector::ZeroVector;
 }
 

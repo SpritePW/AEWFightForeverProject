@@ -21,5 +21,6 @@ FMovesSituation::FMovesSituation() {
     this->DistanceOffset = 0.00f;
     this->AllLocationOffsetY = 0.00f;
     this->IsDownRotate2P = false;
+    this->PartnerOffset = FVector2D::ZeroVector;
 }
 

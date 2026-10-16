@@ -8,5 +8,6 @@ FSSWeaponThrowParam::FSSWeaponThrowParam() {
     this->EffectRadius = 0.00f;
     this->DefaultThrowPitch = 0.00f;
     this->UpperBodyAnim = 0;
+    this->ThrowLocationOffset = FVector::ZeroVector;
 }
 

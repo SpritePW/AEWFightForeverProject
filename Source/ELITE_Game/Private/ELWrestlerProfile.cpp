@@ -28,5 +28,7 @@ FELWrestlerProfile::FELWrestlerProfile() {
     this->TShirtsID = 0;
     this->PoseID = 0;
     this->DefaultPartner = EWrestlerID_N::None;
+    this->Birthdate = FDateTime(0);
+    this->Debutdate = FDateTime(0);
 }
 

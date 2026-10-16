@@ -9,5 +9,6 @@ FELDebugMenuSimpleUIParamBase::FELDebugMenuSimpleUIParamBase() {
     this->MinValue = 0.00f;
     this->MaxValue = 0.00f;
     this->UseUIColor = false;
+    this->UIColor = FLinearColor(0.0f, 0.0f, 0.0f, 0.0f);
 }
 

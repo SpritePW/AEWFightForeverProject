@@ -8,5 +8,7 @@ FELEntranceCutsceneAnimationData::FELEntranceCutsceneAnimationData() {
     this->UseBeltProp = false;
     this->IgnoreAttachPosition = EELBeltAttachPosition::None;
     this->UnlockItemId = 0;
+    this->Location = FVector::ZeroVector;
+    this->Rotation = FRotator::ZeroRotator;
 }
 

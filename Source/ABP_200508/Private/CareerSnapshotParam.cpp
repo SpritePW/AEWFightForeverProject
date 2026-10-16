@@ -5,5 +5,6 @@ FCareerSnapshotParam::FCareerSnapshotParam() {
     this->Week = 0;
     this->Location = ECareerStageType::NONE;
     this->Turn = 0;
+    this->DateTime = FDateTime(0);
 }
 
