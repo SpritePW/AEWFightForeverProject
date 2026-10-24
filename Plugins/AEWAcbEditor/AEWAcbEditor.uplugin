@@ -1,0 +1,26 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "AEW ACB Editor",
+	"Description": "Edits CRIWARE ACB/AWB cue sheets directly (add, replace, copy, rename and delete cues, merge the AWB) and imports the result with the CriWare importer. Native replacement for acb_editor.py + cri_utf_tool.",
+	"Category": "AEW Fight Forever",
+	"CreatedBy": "",
+	"EngineVersion": "4.27.0",
+	"CanContainContent": false,
+	"IsBetaVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "AEWAcbEditor",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "CriWare",
+			"Enabled": true
+		}
+	]
+}
