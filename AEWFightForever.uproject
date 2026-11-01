@@ -325,6 +325,15 @@
 		{
 			"Name": "MLSDK",
 			"Enabled": false
+		},
+		{
+			"Name": "USDImporter",
+			"Enabled": true,
+			"SupportedTargetPlatforms": [
+				"Win64",
+				"Mac",
+				"Linux"
+			]
 		}
 	],
 	"TargetPlatforms": [
