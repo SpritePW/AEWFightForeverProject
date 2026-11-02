@@ -1,4 +1,6 @@
 #include "ManaMovie.h"
+#include "EngineUtils.h"
+#include "UObject/LinkerLoad.h"
 
 UManaMovie::UManaMovie() {
     this->NumSubtitleChannels = 0;
@@ -45,3 +47,20 @@ float UManaMovie::GetAverageBitrate() {
 }
 
 
+
+void UManaMovie::Serialize(FArchive& Ar) {
+    Super::Serialize(Ar);
+
+    bool bSerializeFlags = true;
+    if (Ar.IsLoading() && Ar.GetLinker() != nullptr) {
+        FLinkerLoad* Linker = GetLinker();
+        const int32 Index = GetLinkerIndex();
+        if (Linker != nullptr && Linker->ExportMap.IsValidIndex(Index)) {
+            const FObjectExport& Export = Linker->ExportMap[Index];
+            bSerializeFlags = Ar.Tell() + 2 <= Export.SerialOffset + Export.SerialSize;
+        }
+    }
+    if (bSerializeFlags) {
+        FStripDataFlags StripFlags(Ar);
+    }
+}

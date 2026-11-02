@@ -46,6 +46,8 @@ protected:
 public:
     UManaMovie();
 
+    virtual void Serialize(FArchive& Ar) override;
+
     UFUNCTION(BlueprintCallable, BlueprintPure)
     bool Validate() const;
     
