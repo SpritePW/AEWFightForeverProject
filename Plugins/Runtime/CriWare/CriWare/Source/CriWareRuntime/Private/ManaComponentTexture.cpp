@@ -11,3 +11,19 @@ UManaComponentTexture::UManaComponentTexture() {
 }
 
 
+
+FTextureResource* UManaComponentTexture::CreateResource() {
+    return nullptr;
+}
+
+EMaterialValueType UManaComponentTexture::GetMaterialType() const {
+    return MCT_Texture2D;
+}
+
+float UManaComponentTexture::GetSurfaceWidth() const {
+    return SizeX > 0 ? (float)SizeX : 1.0f;
+}
+
+float UManaComponentTexture::GetSurfaceHeight() const {
+    return SizeY > 0 ? (float)SizeY : 1.0f;
+}

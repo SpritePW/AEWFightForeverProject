@@ -30,5 +30,9 @@ public:
     
     UManaComponentTexture();
 
+    virtual class FTextureResource* CreateResource() override;
+    virtual EMaterialValueType GetMaterialType() const override;
+    virtual float GetSurfaceWidth() const override;
+    virtual float GetSurfaceHeight() const override;
 };
 
