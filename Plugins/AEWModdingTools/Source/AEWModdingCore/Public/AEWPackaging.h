@@ -20,6 +20,8 @@ namespace AEWPackaging
 
 	AEWMODDINGCORE_API int32 CookOnlyLabelledContent(TArray<FString>& Log);
 
+	AEWMODDINGCORE_API int32 ClearUnlabelledChunks(bool bAsk, TArray<FString>& Log);
+
 	AEWMODDINGCORE_API int32 CollectLabelledPackages(TArray<FString>& OutPackages);
 
 	AEWMODDINGCORE_API bool AllowCooking(const FString& PackageName, TArray<FString>* Log = nullptr);

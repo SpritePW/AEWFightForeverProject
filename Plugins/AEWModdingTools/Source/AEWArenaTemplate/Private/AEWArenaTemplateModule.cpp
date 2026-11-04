@@ -91,6 +91,18 @@ private:
 			LOCTEXT("OpenLabel", "Arena Template"),
 			LOCTEXT("OpenTip", "Copy an imported arena template (map + its own sublevels) into a new arena and add it to the game's arena list."),
 			FUIAction(FExecuteAction::CreateStatic(&UAEWArenaTools::OpenDialog)));
+		AEWMenus::AddToolEntry("AEWArenaStartMarkers",
+			LOCTEXT("StartMarkers", "Arena: Add Start Markers"),
+			LOCTEXT("StartMarkersTip", "Create BP_StartMarker in the open arena's folder and place one on every player and referee start of ArenaMatch. Move the ones you want to change and delete the rest; in game they move ArenaMatch's starts for this arena only."),
+			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::AddStartMarkers(); })));
+		AEWMenus::AddToolEntry("AEWArenaCameraOverride",
+			LOCTEXT("CameraOverride", "Arena: Add Camera Override"),
+			LOCTEXT("CameraOverrideTip", "Create BP_CameraOverride and a zoomed-out copy of the gameplay camera table in the open arena's folder and place the override in the map. In game the camera uses that table in this arena only."),
+			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::AddCameraOverride(); })));
+		AEWMenus::AddToolEntry("AEWArenaRuleOverride",
+			LOCTEXT("RuleNodes", "Arena: Add Rule Override"),
+			LOCTEXT("RuleNodesTip", "Add nodes to the open arena's Level Blueprint that change the match rule for matches in this arena: on BeginPlay they read the game's match rule, pass it through 'Set members in FMatchRule' (tick the fields you want to change) and set it back; on EndPlay they restore the original."),
+			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::AddMatchRuleOverrideNodes(); })));
 	}
 
 	FDelegateHandle RemovedHandle;

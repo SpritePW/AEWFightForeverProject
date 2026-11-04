@@ -99,24 +99,6 @@ void SArenaTemplatePanel::Construct(const FArguments& InArgs)
 				LOCTEXT("SyncTip", "Remove mod arenas whose map was deleted from the arena table, the enum and the unlock table, then renumber the mod arenas without gaps (renaming their <ID>_ maps and folders)."),
 				[this]() { UAEWArenaTools::SyncArenaList(GetDefault<UAEWArenaTemplateSettings>()->bRenumberOnDelete, true); Refresh(); })
 		]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 4, 0)
-		[
-			AEWToolUI::MakeButton(LOCTEXT("StartMarkers", "Add start markers"),
-				LOCTEXT("StartMarkersTip", "Create BP_StartMarker in the open arena's folder and place one on every player and referee start of ArenaMatch. Move the ones you want to change and delete the rest; in game they move ArenaMatch's starts for this arena only."),
-				[]() { UAEWArenaTools::AddStartMarkers(); })
-		]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 4, 0)
-		[
-			AEWToolUI::MakeButton(LOCTEXT("CameraOverride", "Add camera override"),
-				LOCTEXT("CameraOverrideTip", "Create BP_CameraOverride and a zoomed-out copy of the gameplay camera table in the open arena's folder and place the override in the map. In game the camera uses that table in this arena only."),
-				[]() { UAEWArenaTools::AddCameraOverride(); })
-		]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 4, 0)
-		[
-			AEWToolUI::MakeButton(LOCTEXT("RuleNodes", "Add rule override"),
-				LOCTEXT("RuleNodesTip", "Add nodes to the open arena's Level Blueprint that change the match rule for matches in this arena: on BeginPlay they read the game's match rule, pass it through 'Set members in FMatchRule' (tick the fields you want to change) and set it back; on EndPlay they restore the original."),
-				[]() { UAEWArenaTools::AddMatchRuleOverrideNodes(); })
-		]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(16, 0, 8, 0)
 		[
 			AEWToolUI::MakePrimaryButton(LOCTEXT("Create", "Create arena"),
