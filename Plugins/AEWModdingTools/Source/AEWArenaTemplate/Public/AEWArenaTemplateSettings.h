@@ -26,6 +26,12 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Arena List", meta = (DisplayName = "Full Map Path In LevelName", ToolTip = "Write the map's full package path (/Game/.../17_MyArena) into LevelName. The game looks short names up in .pak file lists only, so a mod map (which lives in a .utoc) is only found by its full path. Sync Arena List converts existing rows."))
 	bool bUseFullLevelPath = true;
 
+	UPROPERTY(EditAnywhere, config, Category = "Arena List", meta = (DisplayName = "Display Name Via Enum Text", ToolTip = "The game shows ST_Name/ST_Key looked up in the localization table. Give the arena's enum entry a localizable display name and point ST_Name/ST_Key at its namespace and key, so the display name needs no string table. Sync Arena List applies it to existing arenas, using their Arena Name."))
+	bool bLocalizedDisplayName = true;
+
+	UPROPERTY(EditAnywhere, config, Category = "Arena List", meta = (DisplayName = "Display Name Namespace", EditCondition = "bLocalizedDisplayName"))
+	FString DisplayNameNamespace = TEXT("AEWModArena");
+
 	UPROPERTY(EditAnywhere, config, Category = "Unlocks", meta = (DisplayName = "Create Unlock Row", ToolTip = "Give each new arena its own default-unlocked unlock row and point the arena's ItemID at it."))
 	bool bCreateUnlock = true;
 

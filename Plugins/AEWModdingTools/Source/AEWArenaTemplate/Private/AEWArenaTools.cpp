@@ -49,6 +49,8 @@
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Widgets/Notifications/SNotificationList.h"
+#include "Internationalization/TextNamespaceUtil.h"
+#include "Internationalization/TextPackageNamespaceUtil.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogAEWArena, Log, All);
 
@@ -523,6 +525,108 @@ namespace
 		return FString();
 	}
 
+	FString GetFieldString(const UStruct* Struct, const uint8* Row, const TCHAR* Base)
+	{
+		FProperty* P = FindField(Struct, Base);
+		if (FStrProperty* Str = CastField<FStrProperty>(P))
+		{
+			return Str->GetPropertyValue_InContainer(Row);
+		}
+		if (FTextProperty* Text = CastField<FTextProperty>(P))
+		{
+			return Text->GetPropertyValue_InContainer(Row).ToString();
+		}
+		if (FNameProperty* Name = CastField<FNameProperty>(P))
+		{
+			return Name->GetPropertyValue_InContainer(Row).ToString();
+		}
+		return FString();
+	}
+
+	bool SetFieldString(const UStruct* Struct, uint8* Row, const TCHAR* Base, const FString& Value)
+	{
+		FProperty* P = FindField(Struct, Base);
+		if (FStrProperty* Str = CastField<FStrProperty>(P))
+		{
+			Str->SetPropertyValue_InContainer(Row, Value);
+			return true;
+		}
+		if (FTextProperty* Text = CastField<FTextProperty>(P))
+		{
+			Text->SetPropertyValue_InContainer(Row, FText::AsCultureInvariant(Value));
+			return true;
+		}
+		if (FNameProperty* Name = CastField<FNameProperty>(P))
+		{
+			Name->SetPropertyValue_InContainer(Row, FName(*Value));
+			return true;
+		}
+		UE_LOG(LogAEWArena, Warning, TEXT("field %s not found in %s"), Base, *Struct->GetName());
+		return false;
+	}
+
+	bool ApplyDisplayName(UUserDefinedEnum* Enum, const UStruct* RS, uint8* Row, int64 ArenaId, FString Shown, bool bAdoptEnumText = false)
+	{
+		const UAEWArenaTemplateSettings* S = Settings();
+		if (!S->bLocalizedDisplayName || !Enum || !Row)
+		{
+			return false;
+		}
+		const int32 Index = Enum->GetIndexByValue(ArenaId);
+		if (Index == INDEX_NONE)
+		{
+			UE_LOG(LogAEWArena, Warning, TEXT("arena %lld has no %s entry - display name not set"), ArenaId, *Enum->GetName());
+			return false;
+		}
+		const FString Entry = Enum->GetNameStringByIndex(Index);
+		FString Namespace = S->DisplayNameNamespace.IsEmpty() ? FString(TEXT("AEWModArena")) : S->DisplayNameNamespace;
+#if USE_STABLE_LOCALIZATION_KEYS
+		Namespace = TextNamespaceUtil::BuildFullNamespace(Namespace, TextNamespaceUtil::EnsurePackageNamespace(Enum), true);
+#endif
+		const FString Key = TEXT("ARENA_") + Entry;
+		bool bChanged = false;
+		const FText* Old = Enum->DisplayNameMap.Find(FName(*Entry));
+		if (bAdoptEnumText && Old && !Old->IsEmpty() && Old->ToString() != Entry
+			&& FTextInspector::GetKey(*Old).Get(FString()) != Key)
+		{
+			const FString Typed = Old->ToString();
+			if (Typed != Shown)
+			{
+				UE_LOG(LogAEWArena, Log, TEXT("arena %lld: using the name typed in %s, \"%s\""), ArenaId, *Enum->GetName(), *Typed);
+				Shown = Typed;
+				SetFieldString(RS, Row, TEXT("ArenaName"), Shown);
+				bChanged = true;
+			}
+		}
+		if (Shown.IsEmpty())
+		{
+			return bChanged;
+		}
+		if (!Old || Old->ToString() != Shown
+			|| FTextInspector::GetNamespace(*Old).Get(FString()) != Namespace
+			|| FTextInspector::GetKey(*Old).Get(FString()) != Key)
+		{
+			Enum->Modify();
+			Enum->DisplayNameMap.Add(FName(*Entry), FInternationalization::ForUseOnlyByLocMacroAndGraphNodeTextLiterals_CreateText(*Shown, *Namespace, *Key));
+			Enum->MarkPackageDirty();
+			bChanged = true;
+		}
+		const FString CookedNamespace = TextNamespaceUtil::StripPackageNamespace(Namespace);
+		if (GetFieldString(RS, Row, TEXT("ST_Name")) != CookedNamespace)
+		{
+			bChanged |= SetFieldString(RS, Row, TEXT("ST_Name"), CookedNamespace);
+		}
+		if (GetFieldString(RS, Row, TEXT("ST_Key")) != Key)
+		{
+			bChanged |= SetFieldString(RS, Row, TEXT("ST_Key"), Key);
+		}
+		if (bChanged)
+		{
+			UE_LOG(LogAEWArena, Log, TEXT("arena %lld: display name \"%s\" (%s / %s)"), ArenaId, *Shown, *Namespace, *Key);
+		}
+		return bChanged;
+	}
+
 	FString LevelValue(const FString& Level)
 	{
 		if (!Settings()->bUseFullLevelPath)
@@ -707,6 +811,7 @@ int32 UAEWArenaTools::RegisterArena(const FString& LevelName, const FString& Cop
 	SetBoolField(RS, NewRow, TEXT("IsSelectable"), true);
 	SetBoolField(RS, NewRow, TEXT("IsSelectableDev"), true);
 	SetIntField(RS, NewRow, TEXT("ItemID"), UnlockId);
+	ApplyDisplayName(Enum, RS, NewRow, NewValue, Shown);
 	NewRows->MarkPackageDirty();
 	RefreshComposite(Table);
 	ToSave.AddUnique(NewRows->GetOutermost());
@@ -1502,6 +1607,41 @@ int32 UAEWArenaTools::SyncArenaList(bool bRenumber, bool bAsk)
 		return -1;
 	}
 	const TSet<FName> Existing = ExistingWorldNames();
+	if (S->bLocalizedDisplayName)
+	{
+		UUserDefinedEnum* Enum = LoadSetting<UUserDefinedEnum>(S->ArenaEnum);
+		if (Enum)
+		{
+			const UScriptStruct* RS = NewRows->GetRowStruct();
+			NewRows->Modify();
+			int32 Named = 0;
+			for (const TPair<FName, uint8*>& R : NewRows->GetRowMap())
+			{
+				int64 Id = -1;
+				if (!GetIntField(RS, R.Value, TEXT("ArenaId"), Id) && R.Key.ToString().IsNumeric())
+				{
+					Id = FCString::Atoi64(*R.Key.ToString());
+				}
+				if (ApplyDisplayName(Enum, RS, R.Value, Id, GetFieldString(RS, R.Value, TEXT("ArenaName")), true))
+				{
+					++Named;
+				}
+			}
+			if (Named > 0)
+			{
+				NewRows->MarkPackageDirty();
+				TArray<UPackage*> ToSave = { NewRows->GetOutermost(), Enum->GetOutermost() };
+				if (UDataTable* Table = LoadSetting<UDataTable>(S->ArenaTable))
+				{
+					RefreshComposite(Table);
+					ToSave.AddUnique(Table->GetOutermost());
+				}
+				UEditorLoadingAndSavingUtils::SavePackages(ToSave, false);
+				RemoveStrayUexp(Enum->GetOutermost());
+				UE_LOG(LogAEWArena, Log, TEXT("display names set for %d arena(s)"), Named);
+			}
+		}
+	}
 	if (S->bUseFullLevelPath)
 	{
 		int32 Converted = 0;
