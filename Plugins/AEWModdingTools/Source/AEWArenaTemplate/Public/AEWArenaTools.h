@@ -5,6 +5,7 @@
 #include "AEWArenaTools.generated.h"
 
 class ULevelStreaming;
+class UBlueprint;
 
 struct FAEWArenaListEntry
 {
@@ -55,6 +56,18 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
 	static bool UnregisterArena(int32 ArenaId, bool bRenumber = true);
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static int32 AddStartMarkers();
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static bool AddCameraOverride();
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static bool AddMatchRuleOverrideNodes();
+
+	static UBlueprint* EnsureStartMarkerBlueprint(const FString& ArenaFolder, bool bRebuild = false);
+	static UBlueprint* EnsureCameraOverrideBlueprint(const FString& ArenaFolder, bool bRebuild = false);
 
 	static void HandleRemovedLevels(const TSet<FName>& Levels);
 	static bool IsBusy();

@@ -7,7 +7,7 @@ public class AEWArenaTemplate : ModuleRules
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "DeveloperSettings" });
 		PrivateDependencyModuleNames.AddRange(new string[] {
-			"UnrealEd", "AssetTools", "AssetRegistry", "Slate", "SlateCore", "InputCore", "EditorStyle", "ToolMenus", "Settings", "AEWModdingCore"
+			"UnrealEd", "AssetTools", "AssetRegistry", "Slate", "SlateCore", "InputCore", "EditorStyle", "ToolMenus", "Settings", "AEWModdingCore", "BlueprintGraph"
 		});
 	}
 }

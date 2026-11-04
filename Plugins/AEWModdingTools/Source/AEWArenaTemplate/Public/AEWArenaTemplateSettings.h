@@ -68,4 +68,10 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Defaults", meta = (ContentDir, DisplayName = "Parent Folder For New Arenas"))
 	FDirectoryPath DefaultParentFolder;
 
+	UPROPERTY(EditAnywhere, config, Category = "Arena Overrides", meta = (AllowedClasses = "DataTable", DisplayName = "Game Camera Table", ToolTip = "The game's gameplay camera table (DT_GameplayCameraParam). Add Camera Override copies it into the arena folder."))
+	FSoftObjectPath GameCameraTable = FSoftObjectPath(TEXT("/Game/GameData/Assets/DataTable/DT_GameplayCameraParam.DT_GameplayCameraParam"));
+
+	UPROPERTY(EditAnywhere, config, Category = "Arena Overrides", meta = (ClampMin = "1.0", DisplayName = "Camera Zoom-Out Scale", ToolTip = "Applied to the arena's copy of the camera table: RadiusMax_Arena is multiplied by this, RadiusMax_Ring and RadiusMin_Arena by a smaller share of it."))
+	float CameraZoomOutScale = 2.0f;
+
 };
