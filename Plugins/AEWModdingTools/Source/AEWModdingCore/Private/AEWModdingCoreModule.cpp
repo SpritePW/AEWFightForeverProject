@@ -66,26 +66,30 @@ private:
 			FUIAction(FExecuteAction::CreateStatic(&FAEWModdingCoreModule::CookOnly)));
 	}
 
+	static void Show(const FText& Title, const TArray<FString>& Log)
+	{
+		for (const FString& Line : Log)
+		{
+			if (!Line.IsEmpty())
+			{
+				UE_LOG(LogAEWModding, Log, TEXT("%s"), *Line);
+			}
+		}
+		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(FString::Join(Log, TEXT("\n"))), &Title);
+	}
+
 	static void CookOnly()
 	{
 		TArray<FString> Log;
 		AEWPackaging::CookOnlyLabelledContent(Log);
-		for (const FString& Line : Log)
-		{
-			UE_LOG(LogAEWModding, Log, TEXT("%s"), *Line);
-		}
-		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(FString::Join(Log, TEXT("\n"))));
+		Show(LOCTEXT("CookOnlyLabelledContentTitle", "Cook Only Labelled Content"), Log);
 	}
 
 	static void Rebuild()
 	{
 		TArray<FString> Log;
 		AEWPackaging::RebuildTableLabels(Log);
-		for (const FString& Line : Log)
-		{
-			UE_LOG(LogAEWModding, Log, TEXT("%s"), *Line);
-		}
-		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(FString::Join(Log, TEXT("\n"))));
+		Show(LOCTEXT("RebuildTableLabelsTitle", "Rebuild Table Labels"), Log);
 	}
 };
 

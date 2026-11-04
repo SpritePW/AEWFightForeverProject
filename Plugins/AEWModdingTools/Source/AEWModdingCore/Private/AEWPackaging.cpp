@@ -25,6 +25,45 @@ namespace AEWPackaging
 		}
 	}
 
+	static FString NameList(TArray<FString> Names, int32 Max = 30)
+	{
+		Names.Sort();
+		TArray<FString> Lines;
+		for (int32 i = 0; i < Names.Num() && i < Max; ++i)
+		{
+			Lines.Add(TEXT("    ") + Names[i]);
+		}
+		if (Names.Num() > Max)
+		{
+			Lines.Add(FString::Printf(TEXT("    ... and %d more"), Names.Num() - Max));
+		}
+		return FString::Join(Lines, TEXT("\n"));
+	}
+
+	static TArray<FString> ObjectNames(const TArray<UObject*>& Objects)
+	{
+		TArray<FString> Names;
+		for (UObject* Object : Objects)
+		{
+			if (Object)
+			{
+				Names.Add(Object->GetName());
+			}
+		}
+		return Names;
+	}
+
+	static void AddSection(TArray<FString>& Log, const FString& Header, const TArray<FString>& Names)
+	{
+		if (Names.Num() == 0)
+		{
+			return;
+		}
+		Log.Add(TEXT(""));
+		Log.Add(Header);
+		Log.Add(NameList(Names));
+	}
+
 	static FString NormDir(FString D)
 	{
 		D.TrimStartAndEndInline();
@@ -88,13 +127,21 @@ namespace AEWPackaging
 		}
 		Label->MarkPackageDirty();
 		ToSave.AddUnique(Label->GetOutermost());
-		AddLog(Log, FString::Printf(TEXT("Label %s%s: chunk %d, %d asset(s) added%s."), *Name, bNew ? TEXT(" (new)") : TEXT(""), ChunkId, Added,
-			bLabelDirectory ? (bRecursive ? TEXT(", labels its folder and sub-folders") : TEXT(", labels its folder")) : TEXT("")));
+		if (bNew || Added > 0)
+		{
+			AddLog(Log, FString::Printf(TEXT("%s%s (chunk %d): %d asset(s) added%s"), *Name, bNew ? TEXT(" [new]") : TEXT(""), ChunkId, Added,
+				bLabelDirectory ? (bRecursive ? TEXT(", plus its folder and sub-folders") : TEXT(", plus its folder")) : TEXT("")));
+		}
 
 		if (Settings()->bAllowCookingLabelledAssets)
 		{
-			AllowCooking(PackageName, Log);
-			AllowCookingOf(Assets, Log);
+			TArray<FString> Opened;
+			AllowCooking(PackageName, &Opened);
+			AllowCookingOf(Assets, &Opened);
+			for (const FString& Dir : Opened)
+			{
+				AddLog(Log, TEXT("Now cookable (removed from 'Directories to never cook'): ") + Dir);
+			}
 		}
 		return Label;
 	}
@@ -181,13 +228,7 @@ namespace AEWPackaging
 		}
 		if (Log && Dropped.Num() > 0)
 		{
-			TArray<FString> Names;
-			for (UObject* Object : Dropped)
-			{
-				Names.Add(Object->GetName());
-			}
-			Names.Sort();
-			Log->Add(FString::Printf(TEXT("Skipped %d unchanged table(s) (their _New table is empty): %s"), Names.Num(), *FString::Join(Names, TEXT(", "))));
+			AddSection(*Log, FString::Printf(TEXT("Not labelled, no new rows (%d):"), Dropped.Num()), ObjectNames(Dropped));
 		}
 		return Dropped;
 	}
@@ -254,7 +295,7 @@ namespace AEWPackaging
 		return Last;
 	}
 
-	static void ReplaceTableEntries(const FString& LabelPackage, int32 ChunkId, const TArray<UObject*>& Tables, TArray<UPackage*>& ToSave, TArray<FString>* Log)
+	static void ReplaceTableEntries(const FString& LabelPackage, int32 ChunkId, const TArray<UObject*>& Tables, TArray<UPackage*>& ToSave, TArray<FString>* Log, TArray<FString>* Cookable)
 	{
 		if (LabelPackage.IsEmpty())
 		{
@@ -280,10 +321,20 @@ namespace AEWPackaging
 			Label->ExplicitAssets.AddUnique(TSoftObjectPtr<UObject>(Table));
 		}
 		Label->MarkPackageDirty();
-		AddLog(Log, FString::Printf(TEXT("%s: %d table(s) (was %d entries, chunk %d)."), *Label->GetName(), Tables.Num(), Before, ChunkId));
+		if (Log)
+		{
+			const int32 Diff = Tables.Num() - Before;
+			AddSection(*Log, FString::Printf(TEXT("%s, chunk %d: %d table(s)%s"), *Label->GetName(), ChunkId, Tables.Num(),
+				Diff == 0 ? TEXT("") : *FString::Printf(TEXT(" (%+d)"), Diff)), ObjectNames(Tables));
+			if (Tables.Num() == 0)
+			{
+				Log->Add(TEXT(""));
+				Log->Add(FString::Printf(TEXT("%s, chunk %d: empty"), *Label->GetName(), ChunkId));
+			}
+		}
 		if (Settings()->bAllowCookingLabelledAssets)
 		{
-			AllowCookingOf(Tables, Log);
+			AllowCookingOf(Tables, Cookable);
 		}
 	}
 
@@ -336,16 +387,23 @@ namespace AEWPackaging
 			}
 		}
 
-		PruneUnchangedTables(All, &Log);
+		TArray<FString> Body;
+		TArray<FString> Cookable;
+		PruneUnchangedTables(All, &Body);
+		TArray<FString> Skipped = Body;
+		Body.Reset();
 		TArray<UObject*> NewTables;
 		TArray<UObject*> BaseTables;
 		SplitTables(All, NewTables, BaseTables);
 		TArray<UPackage*> ToSave;
-		ReplaceTableEntries(S->NewTablesLabel, S->NewTablesChunkId, NewTables, ToSave, &Log);
-		ReplaceTableEntries(S->BaseTablesLabel, S->BaseTablesChunkId, BaseTables, ToSave, &Log);
+		ReplaceTableEntries(S->NewTablesLabel, S->NewTablesChunkId, NewTables, ToSave, &Body, &Cookable);
+		ReplaceTableEntries(S->BaseTablesLabel, S->BaseTablesChunkId, BaseTables, ToSave, &Body, &Cookable);
 		UEditorLoadingAndSavingUtils::SavePackages(ToSave, false);
-		Log.Add(FString::Printf(TEXT("Table labels rebuilt from %d table(s) found: %d _New table(s) in chunk %d, %d other table(s) in chunk %d."),
-			Tables.Num(), NewTables.Num(), S->NewTablesChunkId, BaseTables.Num(), S->BaseTablesChunkId));
+
+		Log.Add(FString::Printf(TEXT("Table labels rebuilt: %d of %d table(s) labelled."), NewTables.Num() + BaseTables.Num(), Tables.Num()));
+		Log.Append(Body);
+		Log.Append(Skipped);
+		AddSection(Log, TEXT("Removed from 'Directories to never cook':"), Cookable);
 		return NewTables.Num() + BaseTables.Num();
 	}
 
@@ -412,7 +470,7 @@ namespace AEWPackaging
 		{
 			PS->SaveConfig();
 			PS->UpdateDefaultConfigFile();
-			AddLog(Log, TEXT("Packaging: narrowed 'Directories to never cook' so ") + Folder + TEXT(" can be cooked."));
+			AddLog(Log, Folder);
 		}
 		return bChanged;
 	}
@@ -485,7 +543,7 @@ namespace AEWPackaging
 		Chunks.Sort();
 		if (Chunks.Num() == 0)
 		{
-			return TEXT("No label chunks to detach from chunk 0.");
+			return FString();
 		}
 		if (Chunks.Num() == 1)
 		{
@@ -507,7 +565,7 @@ namespace AEWPackaging
 		{
 			Ids.Add(LexToString(Id));
 		}
-		return FString::Printf(TEXT("Chunks %s no longer count as children of chunk 0, so assets the editor loads at startup (tables, enums) stay in their label's chunk instead of falling back to chunk 0 (DefaultEngine.ini, ChunkDependencyInfo)."), *FString::Join(Ids, TEXT(", ")));
+		return FString::Join(Ids, TEXT(", "));
 	}
 
 	int32 CookOnlyLabelledContent(TArray<FString>& Log)
@@ -671,22 +729,17 @@ namespace AEWPackaging
 			}
 		}
 
-		Log.Add(FString::Printf(TEXT("Cook only labelled content: %d label(s), %d folder(s) set to never cook%s."),
-			LabelCount, Never.Num(), bWasCookAll ? TEXT(", 'Cook everything' turned off") : TEXT("")));
-		Log.Add(TEXT("Only labelled assets, Maps To Cook and Directories To Always Cook are cooked; game assets they use are left to the game's own paks."));
-		Log.Add(ChunkLine);
+		Log.Add(Missing.Num() > 0
+			? FString::Printf(TEXT("Cook settings updated - %d unlabelled asset(s) need attention."), Missing.Num())
+			: TEXT("Cook settings updated - only labelled content will be cooked."));
+		Log.Add(TEXT(""));
+		Log.Add(FString::Printf(TEXT("Labels: %d"), LabelCount));
+		Log.Add(FString::Printf(TEXT("Mod chunks: %s"), ChunkLine.IsEmpty() ? TEXT("none") : *ChunkLine));
+		Log.Add(FString::Printf(TEXT("Never-cook folders: %d"), Never.Num()));
+		Log.Add(FString::Printf(TEXT("Cook everything: %s"), bWasCookAll ? TEXT("turned off") : TEXT("off")));
 		if (Missing.Num() > 0)
 		{
-			Missing.Sort();
-			Log.Add(FString::Printf(TEXT("warning: %d asset(s) you made or edited are used but not labelled, so they won't be cooked - move them into a labelled folder or add them to a label:"), Missing.Num()));
-			for (int32 i = 0; i < Missing.Num() && i < 40; ++i)
-			{
-				Log.Add(TEXT("  ") + Missing[i]);
-			}
-			if (Missing.Num() > 40)
-			{
-				Log.Add(FString::Printf(TEXT("  ... and %d more"), Missing.Num() - 40));
-			}
+			AddSection(Log, TEXT("Used but not labelled, so not cooked (move them into a labelled folder or add them to a label):"), Missing);
 		}
 		return Never.Num();
 	}
