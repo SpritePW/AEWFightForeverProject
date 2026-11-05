@@ -89,6 +89,20 @@ namespace
 		return LoadObject<UWorld>(nullptr, *ObjectPathOf(PackageName));
 	}
 
+	void ReleaseWorld(UWorld* World)
+	{
+		if (!World || !GEditor)
+		{
+			return;
+		}
+		UWorld* Current = GEditor->GetEditorWorldContext().World();
+		if (World == Current || (Current && World->PersistentLevel && Current->GetLevels().Contains(World->PersistentLevel)))
+		{
+			return;
+		}
+		World->ClearFlags(RF_Standalone);
+	}
+
 	void ClearBuildData(UWorld* World)
 	{
 		if (World && World->PersistentLevel)
@@ -199,7 +213,7 @@ namespace
 		UDataTable* NewRows = LoadSetting<UDataTable>(S->ArenaNewTable);
 		if (!Table || !Table->RowStruct)
 		{
-			UE_LOG(LogAEWArena, Error, TEXT("Arena Table not found: %s (Project Settings > Plugins > Arena Template)"), *S->ArenaTable.ToString());
+			UE_LOG(LogAEWArena, Error, TEXT("Arena Table not found: %s (Project Settings > Plugins > Arena Maker)"), *S->ArenaTable.ToString());
 			return false;
 		}
 		if (!NewRows || NewRows->RowStruct != Table->RowStruct || Cast<UCompositeDataTable>(NewRows))
@@ -700,7 +714,7 @@ int32 UAEWArenaTools::RegisterArena(const FString& LevelName, const FString& Cop
 	UUserDefinedEnum* Enum = LoadSetting<UUserDefinedEnum>(S->ArenaEnum);
 	if (!Enum)
 	{
-		UE_LOG(LogAEWArena, Error, TEXT("Arena ID Enum not found: %s (Project Settings > Plugins > Arena Template)"), *S->ArenaEnum.ToString());
+		UE_LOG(LogAEWArena, Error, TEXT("Arena ID Enum not found: %s (Project Settings > Plugins > Arena Maker)"), *S->ArenaEnum.ToString());
 		return -1;
 	}
 	UDataTable* Table = nullptr;
@@ -1041,6 +1055,15 @@ FString UAEWArenaTools::CreateArenaFromTemplate(const FString& TemplateMap, cons
 	}
 
 	UEditorLoadingAndSavingUtils::SavePackages(ToSave, false);
+	ReleaseWorld(TplWorld);
+	for (const TPair<FString, FString>& R : Renames)
+	{
+		ReleaseWorld(FindObject<UWorld>(nullptr, *ObjectPathOf(R.Key)));
+	}
+	for (UWorld* W : CreatedWorlds)
+	{
+		ReleaseWorld(W);
+	}
 
 	if (bAddToMapsToCook)
 	{
@@ -1362,6 +1385,10 @@ namespace
 		{
 			AssetTools.FixupReferencers(Redirectors);
 		}
+		for (const TWeakObjectPtr<UObject>& O : Moved)
+		{
+			ReleaseWorld(Cast<UWorld>(O.Get()));
+		}
 		if (bMoveFolder)
 		{
 			RemoveEmptyFolder(OldDir);
@@ -1409,7 +1436,7 @@ namespace
 		UDataTable* NewRows = nullptr;
 		if (!Enum || !PrepareArenaTables(Table, NewRows))
 		{
-			UE_LOG(LogAEWArena, Error, TEXT("arena enum or tables not found (Project Settings > Plugins > Arena Template)"));
+			UE_LOG(LogAEWArena, Error, TEXT("arena enum or tables not found (Project Settings > Plugins > Arena Maker)"));
 			return -1;
 		}
 		TGuardValue<bool> Busy(GArenaBusy, true);

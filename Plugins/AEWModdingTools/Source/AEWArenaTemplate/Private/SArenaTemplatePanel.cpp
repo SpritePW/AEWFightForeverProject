@@ -113,7 +113,7 @@ void SArenaTemplatePanel::Construct(const FArguments& InArgs)
 		]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(16, 0, 0, 0)
 		[
-			AEWToolUI::MakeButton(LOCTEXT("Settings", "Settings..."), LOCTEXT("SettingsTip", "Project Settings > Plugins > Arena Template"),
+			AEWToolUI::MakeButton(LOCTEXT("Settings", "Settings..."), LOCTEXT("SettingsTip", "Project Settings > Plugins > Arena Maker"),
 				[]() { UAEWArenaTools::OpenSettings(); })
 		],
 		TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateSP(this, &SArenaTemplatePanel::GetStatusText)));

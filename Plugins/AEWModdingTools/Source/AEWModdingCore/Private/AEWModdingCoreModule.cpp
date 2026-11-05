@@ -56,16 +56,16 @@ private:
 	void RegisterMenus()
 	{
 		FToolMenuOwnerScoped OwnerScoped(this);
-		AEWMenus::AddToolEntry("RebuildAEWTableLabels",
-			LOCTEXT("RebuildLabels", "Cook: Rebuild Table Labels"),
+		AEWMenus::AddGroupedToolEntry("Cook", LOCTEXT("CookGroup", "Cook"), "RebuildAEWTableLabels",
+			LOCTEXT("RebuildLabels", "Rebuild Table Labels"),
 			LOCTEXT("RebuildLabelsTip", "Put every _New DataTable in the New Tables label and the composites/other tables in the Base Tables label (Project Settings > Plugins > AEW Modding Tools)."),
 			FUIAction(FExecuteAction::CreateStatic(&FAEWModdingCoreModule::Rebuild)));
-		AEWMenus::AddToolEntry("AEWCookOnlyLabelled",
-			LOCTEXT("CookOnlyLabelled", "Cook: Only Labelled Content"),
+		AEWMenus::AddGroupedToolEntry("Cook", LOCTEXT("CookGroup", "Cook"), "AEWCookOnlyLabelled",
+			LOCTEXT("CookOnlyLabelled", "Cook Only Labelled Content"),
 			LOCTEXT("CookOnlyLabelledTip", "Turn off 'Cook everything' and set 'Directories to never cook' to every content folder that holds nothing a label ships, so packaging only cooks your labelled chunks. Run again after adding labels in new folders."),
 			FUIAction(FExecuteAction::CreateStatic(&FAEWModdingCoreModule::CookOnly)));
-		AEWMenus::AddToolEntry("AEWCookClearUnlabelledChunks",
-			LOCTEXT("ClearChunks", "Cook: Clear Unlabelled Chunk Assignments"),
+		AEWMenus::AddGroupedToolEntry("Cook", LOCTEXT("CookGroup", "Cook"), "AEWCookClearUnlabelledChunks",
+			LOCTEXT("ClearChunks", "Clear Unlabelled Chunk Assignments"),
 			LOCTEXT("ClearChunksTip", "List and clear every chunk assignment that doesn't come from a PrimaryAssetLabel: chunk IDs stored in packages (old 'Assign to Chunk') and chunk IDs on Asset Manager rules. Asks before changing anything."),
 			FUIAction(FExecuteAction::CreateStatic(&FAEWModdingCoreModule::ClearChunks)));
 	}

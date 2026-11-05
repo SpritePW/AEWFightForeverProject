@@ -4,7 +4,7 @@
 #include "Engine/DeveloperSettings.h"
 #include "AEWArenaTemplateSettings.generated.h"
 
-UCLASS(config = Editor, defaultconfig, meta = (DisplayName = "Arena Template"))
+UCLASS(config = Editor, defaultconfig, meta = (DisplayName = "Arena Maker"))
 class AEWARENATEMPLATE_API UAEWArenaTemplateSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()

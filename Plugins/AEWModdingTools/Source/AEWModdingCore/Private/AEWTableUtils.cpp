@@ -296,10 +296,11 @@ namespace AEWTables
 
 namespace AEWMenus
 {
-	void AddToolEntry(FName EntryName, const FText& Label, const FText& ToolTip, const FUIAction& Action)
+	static const TCHAR* RootMenuName = TEXT("LevelEditor.MainMenu.Window.AEWModdingTools");
+
+	static UToolMenu* RootMenu()
 	{
 		UToolMenus* Menus = UToolMenus::Get();
-		static const FName SubMenuName(TEXT("LevelEditor.MainMenu.Window.AEWModdingTools"));
 		if (UToolMenu* Window = Menus->ExtendMenu("LevelEditor.MainMenu.Window"))
 		{
 			FToolMenuSection& Section = Window->FindOrAddSection("AEWFightForever");
@@ -307,16 +308,46 @@ namespace AEWMenus
 			if (!Section.FindEntry("AEWModdingTools"))
 			{
 				Section.AddSubMenu("AEWModdingTools", LOCTEXT("SubMenu", "AEW Modding Tools"),
-					LOCTEXT("SubMenuTip", "ACB Editor, Edit Part Maker, Arena Template"), FNewToolMenuChoice());
+					LOCTEXT("SubMenuTip", "ACB Editor, Edit Part Maker, Arena Maker"), FNewToolMenuChoice());
 			}
 		}
-		if (!Menus->IsMenuRegistered(SubMenuName))
+		const FName Root(RootMenuName);
+		if (!Menus->IsMenuRegistered(Root))
 		{
-			Menus->RegisterMenu(SubMenuName);
+			Menus->RegisterMenu(Root);
 		}
-		if (UToolMenu* SubMenu = Menus->ExtendMenu(SubMenuName))
+		return Menus->ExtendMenu(Root);
+	}
+
+	void AddToolEntry(FName EntryName, const FText& Label, const FText& ToolTip, const FUIAction& Action)
+	{
+		if (UToolMenu* Root = RootMenu())
 		{
-			SubMenu->FindOrAddSection("Tools").AddMenuEntry(EntryName, Label, ToolTip, FSlateIcon(), Action);
+			Root->FindOrAddSection("Tools").AddMenuEntry(EntryName, Label, ToolTip, FSlateIcon(), Action);
+		}
+	}
+
+	void AddGroupedToolEntry(FName Group, const FText& GroupLabel, FName EntryName, const FText& Label, const FText& ToolTip, const FUIAction& Action)
+	{
+		UToolMenus* Menus = UToolMenus::Get();
+		UToolMenu* Root = RootMenu();
+		if (!Root)
+		{
+			return;
+		}
+		FToolMenuSection& Groups = Root->FindOrAddSection("Groups");
+		if (!Groups.FindEntry(Group))
+		{
+			Groups.AddSubMenu(Group, GroupLabel, FText::GetEmpty(), FNewToolMenuChoice());
+		}
+		const FName GroupMenu(*FString::Printf(TEXT("%s.%s"), RootMenuName, *Group.ToString()));
+		if (!Menus->IsMenuRegistered(GroupMenu))
+		{
+			Menus->RegisterMenu(GroupMenu);
+		}
+		if (UToolMenu* Sub = Menus->ExtendMenu(GroupMenu))
+		{
+			Sub->FindOrAddSection("Tools").AddMenuEntry(EntryName, Label, ToolTip, FSlateIcon(), Action);
 		}
 	}
 }

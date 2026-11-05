@@ -53,4 +53,6 @@ namespace AEWTables
 namespace AEWMenus
 {
 	AEWMODDINGCORE_API void AddToolEntry(FName EntryName, const FText& Label, const FText& ToolTip, const struct FUIAction& Action);
+
+	AEWMODDINGCORE_API void AddGroupedToolEntry(FName Group, const FText& GroupLabel, FName EntryName, const FText& Label, const FText& ToolTip, const struct FUIAction& Action);
 }

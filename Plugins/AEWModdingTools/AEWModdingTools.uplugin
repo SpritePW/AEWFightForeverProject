@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "1.0",
 	"FriendlyName": "AEW Modding Tools",
-	"Description": "AEW Fight Forever modding tools: ACB Editor (cue sheets), Edit Part Maker (CAW parts), Arena Template (new arenas from imported templates) and editor fixes for cooked game assets.",
+	"Description": "AEW Fight Forever modding tools: ACB Editor (cue sheets), Edit Part Maker (CAW parts), Arena Maker (new arenas from imported templates) and editor fixes for cooked game assets.",
 	"Category": "AEW Fight Forever",
 	"CreatedBy": "",
 	"EngineVersion": "4.27.0",
