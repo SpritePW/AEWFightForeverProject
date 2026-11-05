@@ -11,6 +11,7 @@
 #include "IAssetTools.h"
 #include "Editor.h"
 #include "FileHelpers.h"
+#include "PackageTools.h"
 #include "ObjectTools.h"
 #include "DataTableEditorUtils.h"
 #include "ISettingsModule.h"
@@ -89,18 +90,38 @@ namespace
 		return LoadObject<UWorld>(nullptr, *ObjectPathOf(PackageName));
 	}
 
-	void ReleaseWorld(UWorld* World)
+	void UnloadMaps(const TArray<FString>& PackageNames)
 	{
-		if (!World || !GEditor)
+		if (!GEditor)
 		{
 			return;
 		}
-		UWorld* Current = GEditor->GetEditorWorldContext().World();
-		if (World == Current || (Current && World->PersistentLevel && Current->GetLevels().Contains(World->PersistentLevel)))
+		TSet<UPackage*> InUse;
+		if (UWorld* Current = GEditor->GetEditorWorldContext().World())
 		{
-			return;
+			InUse.Add(Current->GetOutermost());
+			for (ULevel* Level : Current->GetLevels())
+			{
+				if (Level)
+				{
+					InUse.Add(Level->GetOutermost());
+				}
+			}
 		}
-		World->ClearFlags(RF_Standalone);
+		TArray<UPackage*> Packages;
+		for (const FString& Name : PackageNames)
+		{
+			UPackage* Package = FindPackage(nullptr, *Name);
+			if (Package && !InUse.Contains(Package) && !Package->IsDirty())
+			{
+				Packages.AddUnique(Package);
+			}
+		}
+		if (Packages.Num() > 0)
+		{
+			GEditor->ResetTransaction(FText::FromString(TEXT("Arena maps unloaded")));
+			UPackageTools::UnloadPackages(Packages);
+		}
 	}
 
 	void ClearBuildData(UWorld* World)
@@ -1055,14 +1076,17 @@ FString UAEWArenaTools::CreateArenaFromTemplate(const FString& TemplateMap, cons
 	}
 
 	UEditorLoadingAndSavingUtils::SavePackages(ToSave, false);
-	ReleaseWorld(TplWorld);
-	for (const TPair<FString, FString>& R : Renames)
 	{
-		ReleaseWorld(FindObject<UWorld>(nullptr, *ObjectPathOf(R.Key)));
-	}
-	for (UWorld* W : CreatedWorlds)
-	{
-		ReleaseWorld(W);
+		TArray<FString> Loaded = NewMaps;
+		Loaded.Add(TplPkg);
+		for (const TPair<FString, FString>& R : Renames)
+		{
+			Loaded.Add(R.Key);
+		}
+		TplWorld = nullptr;
+		NewWorld = nullptr;
+		CreatedWorlds.Reset();
+		UnloadMaps(Loaded);
 	}
 
 	if (bAddToMapsToCook)
@@ -1385,9 +1409,16 @@ namespace
 		{
 			AssetTools.FixupReferencers(Redirectors);
 		}
-		for (const TWeakObjectPtr<UObject>& O : Moved)
 		{
-			ReleaseWorld(Cast<UWorld>(O.Get()));
+			TArray<FString> MovedMaps;
+			for (const TWeakObjectPtr<UObject>& O : Moved)
+			{
+				if (O.IsValid() && O->IsA<UWorld>())
+				{
+					MovedMaps.Add(O->GetOutermost()->GetName());
+				}
+			}
+			UnloadMaps(MovedMaps);
 		}
 		if (bMoveFolder)
 		{
@@ -1575,6 +1606,78 @@ namespace
 		return Removed.Num() + Moves.Num();
 	}
 
+	int32 RepairArenaMaps(UDataTable* NewRows, const TSet<FName>& Existing)
+	{
+		const UAEWArenaTemplateSettings* S = Settings();
+		const UScriptStruct* RS = NewRows->GetRowStruct();
+		TGuardValue<bool> Busy(GArenaBusy, true);
+		TSet<FString> Used;
+		for (const TPair<FName, uint8*>& R : NewRows->GetRowMap())
+		{
+			Used.Add(ShortLevel(GetNameField(RS, R.Value, TEXT("LevelName")).ToString()));
+		}
+		TMap<FString, FString> PackageMoves;
+		TArray<UPackage*> ToSave;
+		int32 Changed = 0;
+		NewRows->Modify();
+		for (const TPair<FName, uint8*>& R : NewRows->GetRowMap())
+		{
+			const FString RowId = R.Key.ToString();
+			if (!RowId.IsNumeric())
+			{
+				continue;
+			}
+			FString Short = ShortLevel(GetNameField(RS, R.Value, TEXT("LevelName")).ToString());
+			if (!Existing.Contains(FName(*Short)))
+			{
+				const FString Base = StripNumber(Short);
+				TArray<FString> Candidates;
+				for (const FName& W : Existing)
+				{
+					const FString Name = W.ToString();
+					if (Name != Short && !LeadingNumber(Name).IsEmpty() && StripNumber(Name) == Base && !Used.Contains(Name))
+					{
+						Candidates.Add(Name);
+					}
+				}
+				if (Candidates.Num() != 1)
+				{
+					continue;
+				}
+				UE_LOG(LogAEWArena, Log, TEXT("arena %s: map %s not found, using %s"), *RowId, *Short, *Candidates[0]);
+				Used.Add(Candidates[0]);
+				Short = Candidates[0];
+				SetNameField(RS, R.Value, TEXT("LevelName"), FName(*LevelValue(Short)));
+				++Changed;
+			}
+			const FString Prefix = LeadingNumber(Short);
+			if (S->bRenameMapsOnRenumber && !Prefix.IsEmpty() && Prefix != RowId)
+			{
+				FString NewLevel = Short;
+				if (RenameArenaMaps(Short, FCString::Atoi64(*Prefix), FCString::Atoi64(*RowId), NewLevel, PackageMoves, ToSave) && NewLevel != Short)
+				{
+					SetNameField(RS, R.Value, TEXT("LevelName"), FName(*LevelValue(NewLevel)));
+					UE_LOG(LogAEWArena, Log, TEXT("arena %s: maps renamed %s -> %s to match the ID"), *RowId, *Short, *NewLevel);
+					++Changed;
+				}
+			}
+		}
+		if (Changed == 0)
+		{
+			return 0;
+		}
+		NewRows->MarkPackageDirty();
+		ToSave.AddUnique(NewRows->GetOutermost());
+		if (UDataTable* Table = LoadSetting<UDataTable>(S->ArenaTable))
+		{
+			RefreshComposite(Table);
+			ToSave.AddUnique(Table->GetOutermost());
+		}
+		UEditorLoadingAndSavingUtils::SavePackages(ToSave, false);
+		UpdateMapsToCook(PackageMoves, {});
+		return Changed;
+	}
+
 	void Notify(const FString& Message)
 	{
 		FNotificationInfo Info(FText::FromString(Message));
@@ -1633,7 +1736,11 @@ int32 UAEWArenaTools::SyncArenaList(bool bRenumber, bool bAsk)
 		UE_LOG(LogAEWArena, Error, TEXT("New Arena Rows Table not found: %s"), *S->ArenaNewTable.ToString());
 		return -1;
 	}
-	const TSet<FName> Existing = ExistingWorldNames();
+	TSet<FName> Existing = ExistingWorldNames();
+	if (RepairArenaMaps(NewRows, Existing) > 0)
+	{
+		Existing = ExistingWorldNames();
+	}
 	if (S->bLocalizedDisplayName)
 	{
 		UUserDefinedEnum* Enum = LoadSetting<UUserDefinedEnum>(S->ArenaEnum);
