@@ -381,10 +381,6 @@ bool AcbImportBridge::Import(const FRequest& Request, TArray<FString>& OutLog, F
 		}
 		OutLog.Add(FString::Printf(TEXT("Assigned chunk %s (the cue sheet's) to %d cue asset(s)."), *FString::Join(ChunkNames, TEXT(", ")), CuesAssigned));
 	}
-	else if (SheetChunks.Num() == 0 && !AEWPackaging::Settings()->bCreateLabels)
-	{
-		OutLog.Add(TEXT("The cue sheet has no chunk assigned, so its cues and .awb stay in pakchunk0. Assign it with Asset Actions > Assign to Chunk, then import again."));
-	}
 	OutLog.Add(FString::Printf(TEXT("Imported %s: %d SoundAtomCue assets point at it, %d changed."), *Sheet->GetPathName(), CueAssets, ToSave.Num() - 1));
 	if (Orphans.Num() > 0)
 	{
@@ -394,12 +390,9 @@ bool AcbImportBridge::Import(const FRequest& Request, TArray<FString>& OutLog, F
 
 	int32 LabelChunk = 0;
 	const UAEWModdingSettings* Packaging = AEWPackaging::Settings();
-	if (Packaging->bCreateLabels)
+	if (AEWPackaging::UpdateLabel(Request.PackagePath / (TEXT("PAL_") + SheetName), Packaging->ChunkId, LabelAssets, false, false, ToSave, &OutLog))
 	{
-		if (AEWPackaging::UpdateLabel(Request.PackagePath / (TEXT("PAL_") + SheetName), Packaging->ChunkId, LabelAssets, false, false, ToSave, &OutLog))
-		{
-			LabelChunk = Packaging->ChunkId;
-		}
+		LabelChunk = Packaging->ChunkId;
 	}
 
 	if (Request.bHasStreamingAwb)
@@ -466,7 +459,6 @@ bool AcbImportBridge::Import(const FRequest& Request, TArray<FString>& OutLog, F
 		}
 	}
 
-	if (Packaging->bCreateLabels)
 	{
 		TArray<UObject*> Tables;
 		for (UPackage* Package : TArray<UPackage*>(ToSave))

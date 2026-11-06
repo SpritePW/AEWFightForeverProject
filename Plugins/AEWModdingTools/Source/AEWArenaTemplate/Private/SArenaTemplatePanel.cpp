@@ -3,6 +3,8 @@
 #include "AEWToolUI.h"
 #include "AEWPackaging.h"
 #include "AEWModdingSettings.h"
+#include "AssetRegistryModule.h"
+#include "HAL/PlatformTime.h"
 
 #include "Misc/OutputDevice.h"
 #include "Styling/CoreStyle.h"
@@ -90,11 +92,6 @@ void SArenaTemplatePanel::Construct(const FArguments& InArgs)
 		SNew(SHorizontalBox)
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 4, 0)
 		[
-			AEWToolUI::MakeButton(LOCTEXT("Refresh", "Refresh"), LOCTEXT("RefreshTip", "Reload the templates and the arena list."),
-				[this]() { Refresh(); })
-		]
-		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 4, 0)
-		[
 			AEWToolUI::MakeButton(LOCTEXT("Sync", "Sync arena list"),
 				LOCTEXT("SyncTip", "Remove mod arenas whose map was deleted from the arena table, the enum and the unlock table, then renumber the mod arenas without gaps (renaming their <ID>_ maps and folders)."),
 				[this]() { UAEWArenaTools::SyncArenaList(GetDefault<UAEWArenaTemplateSettings>()->bRenumberOnDelete, true); Refresh(); })
@@ -102,7 +99,7 @@ void SArenaTemplatePanel::Construct(const FArguments& InArgs)
 		+ SHorizontalBox::Slot().AutoWidth().Padding(16, 0, 8, 0)
 		[
 			AEWToolUI::MakePrimaryButton(LOCTEXT("Create", "Create arena"),
-				LOCTEXT("CreateTip", "Copy the selected template into a new arena, re-point its sublevels, label it and (if ticked) add it to the arena list."),
+				LOCTEXT("CreateTip", "Copy the selected template or mod arena into a new arena: its maps, sublevels and the blueprints and tables in its folder, re-pointed to the copies. Then label it and (if ticked) add it to the arena list."),
 				[this]() { Create(); }, TAttribute<bool>::Create(TAttribute<bool>::FGetter::CreateLambda(CanCreate)))
 		]
 		+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
@@ -122,7 +119,7 @@ void SArenaTemplatePanel::Construct(const FArguments& InArgs)
 		+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 4)
 		[
 			SNew(SSearchBox)
-			.HintText(LOCTEXT("Search", "Filter templates"))
+			.HintText(LOCTEXT("Search", "Filter templates and arenas"))
 			.OnTextChanged_Lambda([this](const FText& Text) { FilterText = Text.ToString(); ApplyFilter(); })
 		]
 		+ SVerticalBox::Slot().FillHeight(1.f)
@@ -135,7 +132,7 @@ void SArenaTemplatePanel::Construct(const FArguments& InArgs)
 			.HeaderRow
 			(
 				SNew(SHeaderRow)
-				+ SHeaderRow::Column(ArenaTemplateColumns::Name).DefaultLabel(LOCTEXT("ColName", "Template")).FillWidth(0.45f)
+				+ SHeaderRow::Column(ArenaTemplateColumns::Name).DefaultLabel(LOCTEXT("ColName", "Template or arena")).FillWidth(0.45f)
 				+ SHeaderRow::Column(ArenaTemplateColumns::Folder).DefaultLabel(LOCTEXT("ColFolder", "Folder")).FillWidth(0.55f)
 			)
 		];
@@ -233,11 +230,7 @@ void SArenaTemplatePanel::Construct(const FArguments& InArgs)
 						],
 						LOCTEXT("LabelTip", "Create a PrimaryAssetLabel for the arena's maps in this chunk."))
 				]
-				+ SVerticalBox::Slot().AutoHeight()
-				[
-					AEWToolUI::MakeRow(LOCTEXT("Maps", "Maps to cook"), Check(&bAddMaps),
-						LOCTEXT("MapsTip", "Add the maps to Project Settings > Packaging > List of maps to include."))
-				])
+				)
 		]
 
 		+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 6)
@@ -261,8 +254,44 @@ void SArenaTemplatePanel::Construct(const FArguments& InArgs)
 		+ SVerticalBox::Slot().FillHeight(1.f)[ AEWToolUI::MakeBody(List, Side, &LogText, 0.45f) ]
 	];
 
+	IAssetRegistry& AR = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
+	AddedHandle = AR.OnAssetAdded().AddSP(this, &SArenaTemplatePanel::OnAssetChanged);
+	RemovedHandle = AR.OnAssetRemoved().AddSP(this, &SArenaTemplatePanel::OnAssetChanged);
+	RenamedHandle = AR.OnAssetRenamed().AddSP(this, &SArenaTemplatePanel::OnAssetRenamed);
+
 	Refresh();
-	AddLog(TEXT("Pick a template, set the ID and name, then Create arena."));
+	AddLog(TEXT("Pick a template, set the ID and name, then Create arena. The list updates by itself when templates or arenas change."));
+}
+
+void SArenaTemplatePanel::OnAssetChanged(const FAssetData&)
+{
+	QueueRefresh();
+}
+
+void SArenaTemplatePanel::OnAssetRenamed(const FAssetData&, const FString&)
+{
+	QueueRefresh();
+}
+
+void SArenaTemplatePanel::QueueRefresh()
+{
+	bRefreshPending = true;
+	RefreshAt = FPlatformTime::Seconds() + 1.0;
+}
+
+void SArenaTemplatePanel::Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime)
+{
+	SCompoundWidget::Tick(AllottedGeometry, InCurrentTime, InDeltaTime);
+	if (!bRefreshPending || FPlatformTime::Seconds() < RefreshAt || UAEWArenaTools::IsBusy())
+	{
+		return;
+	}
+	if (FModuleManager::GetModuleChecked<FAssetRegistryModule>("AssetRegistry").Get().IsLoadingAssets())
+	{
+		return;
+	}
+	bRefreshPending = false;
+	Refresh(true);
 }
 
 SArenaTemplatePanel::~SArenaTemplatePanel()
@@ -271,10 +300,21 @@ SArenaTemplatePanel::~SArenaTemplatePanel()
 	{
 		GLog->RemoveOutputDevice(LogCapture.Get());
 	}
+	if (FModuleManager::Get().IsModuleLoaded("AssetRegistry"))
+	{
+		IAssetRegistry& AR = FModuleManager::GetModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
+		AR.OnAssetAdded().Remove(AddedHandle);
+		AR.OnAssetRemoved().Remove(RemovedHandle);
+		AR.OnAssetRenamed().Remove(RenamedHandle);
+	}
 }
 
-void SArenaTemplatePanel::Refresh()
+void SArenaTemplatePanel::Refresh(bool bQuiet)
 {
+	const int32 OldTemplates = AllTemplates.Num();
+	const int32 OldArenas = Arenas.Num();
+	const int32 OldNext = NextId;
+	const FString SelectedPackage = Selected.IsValid() ? Selected->Package : FString();
 	AllTemplates.Reset();
 	for (const FString& Pkg : UAEWArenaTools::FindTemplates())
 	{
@@ -291,8 +331,27 @@ void SArenaTemplatePanel::Refresh()
 		ArenaId = NextId;
 	}
 	CheckedId = -1;
+	Selected.Reset();
+	for (const TSharedPtr<FArenaTemplateItem>& Item : AllTemplates)
+	{
+		if (Item->Package == SelectedPackage)
+		{
+			Selected = Item;
+		}
+	}
 	ApplyFilter();
-	AddLog(FString::Printf(TEXT("%d templates, %d arenas, next free arena ID %d."), AllTemplates.Num(), Arenas.Num(), NextId));
+	if (ListView.IsValid())
+	{
+		ListView->ClearSelection();
+		if (Selected.IsValid())
+		{
+			ListView->SetSelection(Selected);
+		}
+	}
+	if (!bQuiet || OldTemplates != AllTemplates.Num() || OldArenas != Arenas.Num() || OldNext != NextId)
+	{
+		AddLog(FString::Printf(TEXT("%d templates, %d arenas, next free arena ID %d."), AllTemplates.Num(), Arenas.Num(), NextId));
+	}
 }
 
 void SArenaTemplatePanel::ApplyFilter()
@@ -319,7 +378,7 @@ void SArenaTemplatePanel::Create()
 	}
 	AddLog(TEXT("---- create ") + MapName() + TEXT(" from ") + Selected->Name);
 	const FString Result = UAEWArenaTools::CreateArenaFromTemplate(Selected->Package, ParentFolder.TrimStartAndEnd(), Name,
-		bCreateLabel, ChunkId, bAddMaps, true, bRegister, DisplayName.TrimStartAndEnd(), bRegister ? ArenaId : -1);
+		bCreateLabel, ChunkId, false, true, bRegister, DisplayName.TrimStartAndEnd(), bRegister ? ArenaId : -1);
 	AddLog(Result.IsEmpty() ? TEXT("Failed - see errors above.") : TEXT("Done: ") + Result);
 	Refresh();
 }

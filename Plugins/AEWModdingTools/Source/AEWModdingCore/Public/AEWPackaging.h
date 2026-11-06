@@ -18,7 +18,7 @@ namespace AEWPackaging
 
 	AEWMODDINGCORE_API int32 RebuildTableLabels(TArray<FString>& Log);
 
-	AEWMODDINGCORE_API int32 CookOnlyLabelledContent(TArray<FString>& Log);
+	AEWMODDINGCORE_API int32 CookOnlyLabelledContent(TArray<FString>& Log, int32* OutMissing = nullptr);
 
 	AEWMODDINGCORE_API int32 ClearUnlabelledChunks(bool bAsk, TArray<FString>& Log);
 

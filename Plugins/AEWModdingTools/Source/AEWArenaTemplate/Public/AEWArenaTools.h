@@ -66,8 +66,53 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
 	static bool AddMatchRuleOverrideNodes();
 
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static bool AddEntranceOverride();
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static int32 AddWeaponPointMarkers();
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static bool UpdateEntranceSwaps(bool bReport = true);
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static bool PreviewGameplayCamera();
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static void ClearCameraPreview();
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static void ToggleCameraPreview();
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static int32 MakeSharedSublevelsOwn();
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static int32 SplitBarricadeSets();
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static int32 MakeBarricadeFromSelected();
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static int32 AddBarricadeSettingsToSelected();
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static int32 RestoreMeshesFromBarricades();
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static int32 ConvertExistingArenas();
+
+	static bool IsConvertingArenas();
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static int32 RemoveOverrides();
+
 	static UBlueprint* EnsureStartMarkerBlueprint(const FString& ArenaFolder, bool bRebuild = false);
-	static UBlueprint* EnsureCameraOverrideBlueprint(const FString& ArenaFolder, bool bRebuild = false);
+	static UBlueprint* EnsureCameraOverrideBlueprint(const FString& ArenaFolder, bool bRebuild, class UDataTable* Table);
+	static UBlueprint* EnsureEntranceOverrideBlueprint(const FString& ArenaFolder, bool bRebuild = false);
+	static UBlueprint* EnsureWeaponMarkerBlueprint(const FString& ArenaFolder, bool bRebuild = false);
+
+	static UBlueprint* EnsureBarricadeGuardBlueprint(const FString& ArenaFolder, UClass* PieceClass, bool bRebuild = false);
 
 	static void HandleRemovedLevels(const TSet<FName>& Levels);
 	static bool IsBusy();

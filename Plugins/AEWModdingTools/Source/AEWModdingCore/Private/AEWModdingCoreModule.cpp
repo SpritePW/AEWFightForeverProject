@@ -5,6 +5,17 @@
 #include "AEWTableUtils.h"
 #include "AEWModdingSettings.h"
 #include "GameDelegates.h"
+#include "AssetRegistryModule.h"
+#include "Containers/Ticker.h"
+#include "Editor.h"
+#include "Engine/DataTable.h"
+#include "Engine/PrimaryAssetLabel.h"
+#include "Framework/Notifications/NotificationManager.h"
+#include "Widgets/Notifications/SNotificationList.h"
+#include "HAL/PlatformTime.h"
+#include "UObject/Package.h"
+#include "UObject/UObjectHash.h"
+#include "UObject/UObjectGlobals.h"
 
 #define LOCTEXT_NAMESPACE "AEWModdingCore"
 
@@ -27,12 +38,41 @@ public:
 			Cook.BindStatic(&FAEWModdingCoreModule::AddLabelledToCook);
 			bBoundCook = true;
 		}
+
+		if (!IsRunningCommandlet())
+		{
+			IAssetRegistry& AR = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
+			SavedHandle = UPackage::PackageSavedEvent.AddRaw(this, &FAEWModdingCoreModule::OnPackageSaved);
+			RemovedHandle = AR.OnAssetRemoved().AddRaw(this, &FAEWModdingCoreModule::OnAssetRemoved);
+			RenamedHandle = AR.OnAssetRenamed().AddRaw(this, &FAEWModdingCoreModule::OnAssetRenamed);
+			if (AR.IsLoadingAssets())
+			{
+				FilesLoadedHandle = AR.OnFilesLoaded().AddRaw(this, &FAEWModdingCoreModule::OnFilesLoaded);
+			}
+			else
+			{
+				Queue(false);
+			}
+		}
 	}
 
 	virtual void ShutdownModule() override
 	{
 		UToolMenus::UnRegisterStartupCallback(this);
 		UToolMenus::UnregisterOwner(this);
+		UPackage::PackageSavedEvent.Remove(SavedHandle);
+		if (TickHandle.IsValid())
+		{
+			FTicker::GetCoreTicker().RemoveTicker(TickHandle);
+			TickHandle.Reset();
+		}
+		if (FModuleManager::Get().IsModuleLoaded("AssetRegistry"))
+		{
+			IAssetRegistry& AR = FModuleManager::GetModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
+			AR.OnAssetRemoved().Remove(RemovedHandle);
+			AR.OnAssetRenamed().Remove(RenamedHandle);
+			AR.OnFilesLoaded().Remove(FilesLoadedHandle);
+		}
 		if (bBoundCook)
 		{
 			FGameDelegates::Get().GetCookModificationDelegate().Unbind();
@@ -41,13 +81,142 @@ public:
 
 private:
 	bool bBoundCook = false;
+	bool bRunning = false;
+	bool bTablesPending = false;
+	double DueAt = 0.0;
+	int32 LastMissing = 0;
+	FDelegateHandle SavedHandle;
+	FDelegateHandle RemovedHandle;
+	FDelegateHandle RenamedHandle;
+	FDelegateHandle FilesLoadedHandle;
+	FDelegateHandle TickHandle;
 
-	static void AddLabelledToCook(TArray<FString>& ExtraPackagesToCook)
+	static bool IsTablePath(const FString& PackageName)
 	{
-		if (!GetDefault<UAEWModdingSettings>()->bCookLabelledAssets)
+		const UAEWModdingSettings* S = AEWPackaging::Settings();
+		for (const FDirectoryPath& Folder : S->TableFolders)
+		{
+			FString Dir = Folder.Path;
+			Dir.RemoveFromEnd(TEXT("/"));
+			if (!Dir.IsEmpty() && (PackageName == Dir || PackageName.StartsWith(Dir + TEXT("/"))))
+			{
+				return true;
+			}
+		}
+		for (const FSoftObjectPath& Path : S->AlwaysLabelTables)
+		{
+			if (Path.GetLongPackageName() == PackageName)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	void Queue(bool bTables)
+	{
+		bTablesPending = bTablesPending || bTables;
+		DueAt = FPlatformTime::Seconds() + 2.0;
+		if (!TickHandle.IsValid())
+		{
+			TickHandle = FTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateRaw(this, &FAEWModdingCoreModule::ProcessQueue), 0.5f);
+		}
+	}
+
+	void OnFilesLoaded()
+	{
+		Queue(false);
+	}
+
+	void OnPackageSaved(const FString& Filename, UObject* Outer)
+	{
+		UPackage* Package = Cast<UPackage>(Outer);
+		if (bRunning || !Package || Filename.Contains(TEXT("Autosaves")))
 		{
 			return;
 		}
+		TArray<UObject*> Objects;
+		GetObjectsWithOuter(Package, Objects, false);
+		bool bTable = false;
+		bool bLabel = false;
+		for (UObject* Object : Objects)
+		{
+			bTable = bTable || Object->IsA<UDataTable>();
+			bLabel = bLabel || Object->IsA<UPrimaryAssetLabel>();
+		}
+		if (bTable && IsTablePath(Package->GetName()))
+		{
+			Queue(true);
+		}
+		else if (bLabel)
+		{
+			Queue(false);
+		}
+	}
+
+	void OnAssetChanged(const FAssetData& Asset)
+	{
+		if (bRunning)
+		{
+			return;
+		}
+		UClass* Class = Asset.GetClass();
+		if (Class && Class->IsChildOf(UDataTable::StaticClass()) && IsTablePath(Asset.PackageName.ToString()))
+		{
+			Queue(true);
+		}
+		else if (Class && Class->IsChildOf(UPrimaryAssetLabel::StaticClass()))
+		{
+			Queue(false);
+		}
+	}
+
+	void OnAssetRemoved(const FAssetData& Asset)
+	{
+		OnAssetChanged(Asset);
+	}
+
+	void OnAssetRenamed(const FAssetData& Asset, const FString& OldPath)
+	{
+		OnAssetChanged(Asset);
+	}
+
+	bool ProcessQueue(float)
+	{
+		if ((GEditor && GEditor->PlayWorld) || GIsSavingPackage || IsGarbageCollecting() || FPlatformTime::Seconds() < DueAt
+			|| FModuleManager::GetModuleChecked<FAssetRegistryModule>("AssetRegistry").Get().IsLoadingAssets())
+		{
+			return true;
+		}
+		TickHandle.Reset();
+		TGuardValue<bool> Running(bRunning, true);
+		TArray<FString> Log;
+		if (bTablesPending)
+		{
+			bTablesPending = false;
+			AEWPackaging::RebuildTableLabels(Log);
+		}
+		int32 Missing = 0;
+		AEWPackaging::CookOnlyLabelledContent(Log, &Missing);
+		for (const FString& Line : Log)
+		{
+			if (!Line.IsEmpty())
+			{
+				UE_LOG(LogAEWModding, Log, TEXT("%s"), *Line);
+			}
+		}
+		if (Missing > 0 && Missing != LastMissing)
+		{
+			FNotificationInfo Info(FText::FromString(FString::Printf(TEXT("%d asset(s) used by your labelled content aren't in a label, so they won't be cooked. See the Output Log (LogAEWModding) for the list."), Missing)));
+			Info.ExpireDuration = 10.f;
+			FSlateNotificationManager::Get().AddNotification(Info);
+		}
+		LastMissing = Missing;
+		return false;
+	}
+
+	static void AddLabelledToCook(TArray<FString>& ExtraPackagesToCook)
+	{
 		const int32 Before = ExtraPackagesToCook.Num();
 		const int32 Labels = AEWPackaging::CollectLabelledPackages(ExtraPackagesToCook);
 		UE_LOG(LogAEWModding, Display, TEXT("Cook: added %d package(s) from %d Always Cook label(s)."), ExtraPackagesToCook.Num() - Before, Labels);
@@ -56,14 +225,6 @@ private:
 	void RegisterMenus()
 	{
 		FToolMenuOwnerScoped OwnerScoped(this);
-		AEWMenus::AddGroupedToolEntry("Cook", LOCTEXT("CookGroup", "Cook"), "RebuildAEWTableLabels",
-			LOCTEXT("RebuildLabels", "Rebuild Table Labels"),
-			LOCTEXT("RebuildLabelsTip", "Put every _New DataTable in the New Tables label and the composites/other tables in the Base Tables label (Project Settings > Plugins > AEW Modding Tools)."),
-			FUIAction(FExecuteAction::CreateStatic(&FAEWModdingCoreModule::Rebuild)));
-		AEWMenus::AddGroupedToolEntry("Cook", LOCTEXT("CookGroup", "Cook"), "AEWCookOnlyLabelled",
-			LOCTEXT("CookOnlyLabelled", "Cook Only Labelled Content"),
-			LOCTEXT("CookOnlyLabelledTip", "Turn off 'Cook everything' and set 'Directories to never cook' to every content folder that holds nothing a label ships, so packaging only cooks your labelled chunks. Run again after adding labels in new folders."),
-			FUIAction(FExecuteAction::CreateStatic(&FAEWModdingCoreModule::CookOnly)));
 		AEWMenus::AddGroupedToolEntry("Cook", LOCTEXT("CookGroup", "Cook"), "AEWCookClearUnlabelledChunks",
 			LOCTEXT("ClearChunks", "Clear Unlabelled Chunk Assignments"),
 			LOCTEXT("ClearChunksTip", "List and clear every chunk assignment that doesn't come from a PrimaryAssetLabel: chunk IDs stored in packages (old 'Assign to Chunk') and chunk IDs on Asset Manager rules. Asks before changing anything."),
@@ -89,19 +250,6 @@ private:
 		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(FString::Join(Log, TEXT("\n"))), &Title);
 	}
 
-	static void CookOnly()
-	{
-		TArray<FString> Log;
-		AEWPackaging::CookOnlyLabelledContent(Log);
-		Show(LOCTEXT("CookOnlyLabelledContentTitle", "Cook Only Labelled Content"), Log);
-	}
-
-	static void Rebuild()
-	{
-		TArray<FString> Log;
-		AEWPackaging::RebuildTableLabels(Log);
-		Show(LOCTEXT("RebuildTableLabelsTitle", "Rebuild Table Labels"), Log);
-	}
 };
 
 IMPLEMENT_MODULE(FAEWModdingCoreModule, AEWModdingCore)

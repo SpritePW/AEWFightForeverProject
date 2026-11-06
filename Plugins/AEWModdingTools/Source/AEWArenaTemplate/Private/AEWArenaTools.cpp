@@ -18,6 +18,26 @@
 #include "Engine/World.h"
 #include "Engine/Level.h"
 #include "Engine/LevelStreaming.h"
+#include "Engine/LevelStreamingAlwaysLoaded.h"
+#include "Engine/MapBuildDataRegistry.h"
+#include "Engine/Blueprint.h"
+#include "Kismet2/KismetEditorUtilities.h"
+#include "Serialization/ArchiveReplaceObjectRef.h"
+#include "UObject/UObjectHash.h"
+#include "EngineUtils.h"
+#include "Components/ChildActorComponent.h"
+#include "ScopedTransaction.h"
+#include "Misc/ScopedSlowTask.h"
+#include "Engine/Selection.h"
+#include "Engine/StaticMeshActor.h"
+#include "StaticMeshResources.h"
+#include "Engine/CollisionProfile.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/SkeletalMesh.h"
+#include "Components/StaticMeshComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Components/BoxComponent.h"
+#include "PhysicsEngine/BodySetup.h"
 #include "Engine/PrimaryAssetLabel.h"
 #include "Engine/UserDefinedEnum.h"
 #include "Engine/DataTable.h"
@@ -122,6 +142,103 @@ namespace
 			GEditor->ResetTransaction(FText::FromString(TEXT("Arena maps unloaded")));
 			UPackageTools::UnloadPackages(Packages);
 		}
+	}
+
+	bool ShouldOwnShared(ULevelStreaming* LS)
+	{
+		if (!Cast<ULevelStreamingAlwaysLoaded>(LS))
+		{
+			return false;
+		}
+		const FString Package = LS->GetWorldAssetPackageName();
+		const FString Name = FPackageName::GetShortName(Package);
+		for (const FString& Keep : Settings()->KeepSharedSublevels)
+		{
+			if (Name.Equals(Keep.TrimStartAndEnd(), ESearchCase::IgnoreCase))
+			{
+				return false;
+			}
+		}
+		return FPackageName::DoesPackageExist(Package);
+	}
+
+	int32 CountActors(UWorld* World)
+	{
+		int32 Count = 0;
+		if (World && World->PersistentLevel)
+		{
+			for (AActor* A : World->PersistentLevel->Actors)
+			{
+				Count += A ? 1 : 0;
+			}
+		}
+		return Count;
+	}
+
+	void ReplaceRefsIn(UPackage* Package, const TMap<UObject*, UObject*>& Replace)
+	{
+		if (!Package || Replace.Num() == 0)
+		{
+			return;
+		}
+		TArray<UObject*> Objects;
+		GetObjectsWithOuter(Package, Objects, true);
+		for (UObject* Object : Objects)
+		{
+			FArchiveReplaceObjectRef<UObject> Ar(Object, Replace, false, true, true);
+		}
+	}
+
+	int32 SwapActorClasses(UWorld* World, const TMap<UClass*, UClass*>& Classes, const TMap<UObject*, UObject*>& Replace)
+	{
+		int32 Swapped = 0;
+		for (ULevel* Level : World ? World->GetLevels() : TArray<ULevel*>())
+		{
+			if (!Level)
+			{
+				continue;
+			}
+			TArray<AActor*> Old;
+			for (AActor* A : Level->Actors)
+			{
+				if (A && Classes.Contains(A->GetClass()))
+				{
+					Old.Add(A);
+				}
+			}
+			for (AActor* A : Old)
+			{
+				UClass* OldClass = A->GetClass();
+				UClass* NewClass = Classes.FindChecked(OldClass);
+				FActorSpawnParameters Params;
+				Params.OverrideLevel = Level;
+				Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				AActor* New = World->SpawnActor<AActor>(NewClass, A->GetActorTransform(), Params);
+				if (!New)
+				{
+					UE_LOG(LogAEWArena, Warning, TEXT("could not respawn %s as %s"), *A->GetActorLabel(), *NewClass->GetName());
+					continue;
+				}
+				for (TFieldIterator<FProperty> It(OldClass, EFieldIteratorFlags::ExcludeSuper); It; ++It)
+				{
+					FProperty* To = FindFProperty<FProperty>(NewClass, It->GetFName());
+					if (To && To->SameType(*It) && !It->HasAnyPropertyFlags(CPF_Transient))
+					{
+						It->CopyCompleteValue(To->ContainerPtrToValuePtr<void>(New), It->ContainerPtrToValuePtr<void>(A));
+					}
+				}
+				FArchiveReplaceObjectRef<UObject> Ar(New, Replace, false, true, true);
+				New->SetActorLabel(A->GetActorLabel());
+				New->SetFolderPath(A->GetFolderPath());
+				New->Tags = A->Tags;
+				New->SetActorTransform(A->GetActorTransform());
+				New->PostEditChange();
+				World->EditorDestroyActor(A, false);
+				Level->MarkPackageDirty();
+				++Swapped;
+			}
+		}
+		return Swapped;
 	}
 
 	void ClearBuildData(UWorld* World)
@@ -538,7 +655,9 @@ namespace
 {
 	FString ShortLevel(const FString& Level)
 	{
-		return FPackageName::GetShortName(Level);
+		FString Package = Level;
+		Package.Split(TEXT("."), &Package, nullptr);
+		return FPackageName::GetShortName(Package);
 	}
 
 	FString ToLevelPath(const FString& Level)
@@ -664,10 +783,6 @@ namespace
 
 	FString LevelValue(const FString& Level)
 	{
-		if (!Settings()->bUseFullLevelPath)
-		{
-			return ShortLevel(Level);
-		}
 		const FString Path = ToLevelPath(Level);
 		if (Path.IsEmpty())
 		{
@@ -853,10 +968,7 @@ int32 UAEWArenaTools::RegisterArena(const FString& LevelName, const FString& Cop
 	ToSave.AddUnique(Table->GetOutermost());
 
 	TArray<FString> PackagingLog;
-	if (AEWPackaging::Settings()->bCreateLabels)
-	{
-		AEWPackaging::LabelSharedTables(Ship, ToSave, &PackagingLog);
-	}
+	AEWPackaging::LabelSharedTables(Ship, ToSave, &PackagingLog);
 	UEditorLoadingAndSavingUtils::SavePackages(ToSave, false);
 	for (const FString& Line : PackagingLog)
 	{
@@ -884,6 +996,21 @@ TArray<FString> UAEWArenaTools::FindTemplates(const FString& RootPath)
 		}
 	}
 	Out.Sort();
+	if (RootPath.IsEmpty())
+	{
+		TArray<FString> Mods;
+		for (const FString& Level : GetArenaLevelNames())
+		{
+			FString Pkg = Level;
+			Pkg.Split(TEXT("."), &Pkg, nullptr);
+			if (Pkg.StartsWith(TEXT("/")) && !IsUnder(FPackageName::GetLongPackagePath(Pkg), Root) && FPackageName::DoesPackageExist(Pkg))
+			{
+				Mods.AddUnique(Pkg);
+			}
+		}
+		Mods.Sort();
+		Out.Append(Mods);
+	}
 	return Out;
 }
 
@@ -955,6 +1082,7 @@ FString UAEWArenaTools::CreateArenaFromTemplate(const FString& TemplateMap, cons
 	}
 
 	TMap<FString, FString> Renames;
+	TSet<FString> Shared;
 	for (ULevelStreaming* LS : TplWorld->GetStreamingLevels())
 	{
 		if (!LS)
@@ -964,7 +1092,11 @@ FString UAEWArenaTools::CreateArenaFromTemplate(const FString& TemplateMap, cons
 		const FString Sub = LS->GetWorldAssetPackageName();
 		if (FPackageName::GetLongPackagePath(Sub) != TplDir)
 		{
-			continue;
+			if (!ShouldOwnShared(LS))
+			{
+				continue;
+			}
+			Shared.Add(Sub);
 		}
 		const FString SubName = FPackageName::GetShortName(Sub);
 		const FString Suffix = SwapNumber(SubName.StartsWith(TplName) ? SubName.Mid(TplName.Len()) : TEXT("_") + SubName, TplNum, NewNum);
@@ -981,13 +1113,26 @@ FString UAEWArenaTools::CreateArenaFromTemplate(const FString& TemplateMap, cons
 	TArray<UPackage*> ToSave;
 	TArray<FString> NewMaps;
 	TArray<UWorld*> CreatedWorlds;
+	TArray<FString> LoadedSubs;
+	TArray<FString> KeptShared;
 
 	for (const TPair<FString, FString>& R : Renames)
 	{
+		LoadedSubs.Add(R.Key);
 		UWorld* Src = LoadWorld(R.Key);
 		if (!Src)
 		{
 			UE_LOG(LogAEWArena, Warning, TEXT("sublevel %s not found - skipped"), *R.Key);
+			if (Shared.Contains(R.Key))
+			{
+				KeptShared.Add(R.Key);
+			}
+			continue;
+		}
+		if (Shared.Contains(R.Key) && CountActors(Src) <= 2)
+		{
+			UE_LOG(LogAEWArena, Warning, TEXT("shared sublevel %s is an empty proxy - kept shared (run the template importer again to fill it, then reopen the arena)"), *R.Key);
+			KeptShared.Add(R.Key);
 			continue;
 		}
 		UWorld* Dup = Cast<UWorld>(AssetTools.DuplicateAsset(FPackageName::GetShortName(R.Value), DestDir, Src));
@@ -1000,7 +1145,11 @@ FString UAEWArenaTools::CreateArenaFromTemplate(const FString& TemplateMap, cons
 		CreatedWorlds.Add(Dup);
 		ToSave.Add(Dup->GetOutermost());
 		NewMaps.Add(R.Value);
-		UE_LOG(LogAEWArena, Log, TEXT("  %s -> %s"), *FPackageName::GetShortName(R.Key), *FPackageName::GetShortName(R.Value));
+		UE_LOG(LogAEWArena, Log, TEXT("  %s -> %s%s"), *FPackageName::GetShortName(R.Key), *FPackageName::GetShortName(R.Value), Shared.Contains(R.Key) ? TEXT(" (own copy of a shared sublevel)") : TEXT(""));
+	}
+	for (const FString& Key : KeptShared)
+	{
+		Renames.Remove(Key);
 	}
 
 	UWorld* NewWorld = Cast<UWorld>(AssetTools.DuplicateAsset(NewName, DestDir, TplWorld));
@@ -1027,6 +1176,55 @@ FString UAEWArenaTools::CreateArenaFromTemplate(const FString& TemplateMap, cons
 	NewWorld->MarkPackageDirty();
 	ToSave.Insert(NewWorld->GetOutermost(), 0);
 	NewMaps.Insert(NewPkg, 0);
+
+	TMap<UObject*, UObject*> Replace;
+	TMap<UClass*, UClass*> ClassSwaps;
+	{
+		IAssetRegistry& FolderAR = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
+		TArray<FAssetData> FolderAssets;
+		FolderAR.GetAssetsByPath(FName(*TplDir), FolderAssets, true);
+		TArray<UBlueprint*> DupBlueprints;
+		for (const FAssetData& A : FolderAssets)
+		{
+			if (A.AssetClass == UWorld::StaticClass()->GetFName() || A.AssetClass == UMapBuildDataRegistry::StaticClass()->GetFName() || A.AssetClass == UPrimaryAssetLabel::StaticClass()->GetFName())
+			{
+				continue;
+			}
+			UObject* Src = A.GetAsset();
+			if (!Src)
+			{
+				continue;
+			}
+			const FString SubPath = A.PackagePath.ToString().Mid(TplDir.Len());
+			const FString DupName = A.AssetName.ToString().Replace(*TplName, *NewName);
+			UObject* Dup = AssetTools.DuplicateAsset(DupName, DestDir + SubPath, Src);
+			if (!Dup)
+			{
+				UE_LOG(LogAEWArena, Warning, TEXT("could not copy %s"), *A.PackageName.ToString());
+				continue;
+			}
+			Replace.Add(Src, Dup);
+			UBlueprint* SrcBP = Cast<UBlueprint>(Src);
+			UBlueprint* DupBP = Cast<UBlueprint>(Dup);
+			if (SrcBP && DupBP && SrcBP->GeneratedClass && DupBP->GeneratedClass)
+			{
+				Replace.Add(SrcBP->GeneratedClass, DupBP->GeneratedClass);
+				ClassSwaps.Add(SrcBP->GeneratedClass, DupBP->GeneratedClass);
+				DupBlueprints.Add(DupBP);
+			}
+			ToSave.Add(Dup->GetOutermost());
+			UE_LOG(LogAEWArena, Log, TEXT("  %s -> %s"), *A.AssetName.ToString(), *DupName);
+		}
+		for (UPackage* Package : TArray<UPackage*>(ToSave))
+		{
+			ReplaceRefsIn(Package, Replace);
+		}
+		for (UBlueprint* BP : DupBlueprints)
+		{
+			FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(BP);
+			FKismetEditorUtilities::CompileBlueprint(BP);
+		}
+	}
 	UE_LOG(LogAEWArena, Log, TEXT("%s -> %s: %d own sublevels copied and re-pointed"), *TplPkg, *NewPkg, Repointed);
 
 	{
@@ -1079,10 +1277,7 @@ FString UAEWArenaTools::CreateArenaFromTemplate(const FString& TemplateMap, cons
 	{
 		TArray<FString> Loaded = NewMaps;
 		Loaded.Add(TplPkg);
-		for (const TPair<FString, FString>& R : Renames)
-		{
-			Loaded.Add(R.Key);
-		}
+		Loaded.Append(LoadedSubs);
 		TplWorld = nullptr;
 		NewWorld = nullptr;
 		CreatedWorlds.Reset();
@@ -1115,9 +1310,31 @@ FString UAEWArenaTools::CreateArenaFromTemplate(const FString& TemplateMap, cons
 		}
 	}
 
-	if (bOpenAfter)
+	if (bOpenAfter || ClassSwaps.Num() > 0)
 	{
 		FEditorFileUtils::LoadMap(FPackageName::LongPackageNameToFilename(NewPkg, FPackageName::GetMapPackageExtension()), false, true);
+	}
+	if (ClassSwaps.Num() > 0 && GEditor)
+	{
+		UWorld* Opened = GEditor->GetEditorWorldContext().World();
+		const int32 Swapped = SwapActorClasses(Opened, ClassSwaps, Replace);
+		if (Swapped > 0)
+		{
+			UE_LOG(LogAEWArena, Log, TEXT("%d actor(s) now use the new arena's own blueprints"), Swapped);
+			TArray<UPackage*> Dirty;
+			for (ULevel* Level : Opened->GetLevels())
+			{
+				if (Level && Level->GetOutermost()->IsDirty())
+				{
+					Dirty.Add(Level->GetOutermost());
+				}
+			}
+			UEditorLoadingAndSavingUtils::SavePackages(Dirty, false);
+		}
+		if (!bOpenAfter)
+		{
+			UEditorLoadingAndSavingUtils::NewBlankMap(false);
+		}
 	}
 	UE_LOG(LogAEWArena, Log, TEXT("done: %s. Next: check the Level Blueprint, mark the lighting scenarios, build lighting."), *NewPkg);
 	return NewPkg;
@@ -1564,10 +1781,7 @@ namespace
 			const FString OldStored = GetNameField(RS, Data, TEXT("LevelName")).ToString();
 			const FString OldLevel = ShortLevel(OldStored);
 			FString NewLevel = OldLevel;
-			if (S->bRenameMapsOnRenumber)
-			{
-				RenameArenaMaps(OldLevel, OldId, NewId, NewLevel, PackageMoves, ToSave);
-			}
+			RenameArenaMaps(OldLevel, OldId, NewId, NewLevel, PackageMoves, ToSave);
 			if (NewLevel != OldLevel)
 			{
 				SetNameField(RS, Data, TEXT("LevelName"), FName(*LevelValue(NewLevel)));
@@ -1594,10 +1808,7 @@ namespace
 		}
 
 		TArray<FString> PackagingLog;
-		if (AEWPackaging::Settings()->bCreateLabels)
-		{
-			AEWPackaging::LabelSharedTables(Ship, ToSave, &PackagingLog);
-		}
+		AEWPackaging::LabelSharedTables(Ship, ToSave, &PackagingLog);
 		UEditorLoadingAndSavingUtils::SavePackages(ToSave, false);
 		RemoveStrayUexp(Enum->GetOutermost());
 		UpdateMapsToCook(PackageMoves, RemovedLevels);
@@ -1651,7 +1862,7 @@ namespace
 				++Changed;
 			}
 			const FString Prefix = LeadingNumber(Short);
-			if (S->bRenameMapsOnRenumber && !Prefix.IsEmpty() && Prefix != RowId)
+			if (!Prefix.IsEmpty() && Prefix != RowId)
 			{
 				FString NewLevel = Short;
 				if (RenameArenaMaps(Short, FCString::Atoi64(*Prefix), FCString::Atoi64(*RowId), NewLevel, PackageMoves, ToSave) && NewLevel != Short)
@@ -1678,8 +1889,15 @@ namespace
 		return Changed;
 	}
 
+	bool GArenaPassQuiet = false;
+
 	void Notify(const FString& Message)
 	{
+		if (GArenaPassQuiet)
+		{
+			UE_LOG(LogAEWArena, Log, TEXT("%s"), *Message);
+			return;
+		}
 		FNotificationInfo Info(FText::FromString(Message));
 		Info.ExpireDuration = 6.f;
 		FSlateNotificationManager::Get().AddNotification(Info);
@@ -1776,7 +1994,6 @@ int32 UAEWArenaTools::SyncArenaList(bool bRenumber, bool bAsk)
 			}
 		}
 	}
-	if (S->bUseFullLevelPath)
 	{
 		int32 Converted = 0;
 		for (const TPair<FName, uint8*>& R : NewRows->GetRowMap())
@@ -1898,6 +2115,1017 @@ bool UAEWArenaTools::RepointStreamingLevel(ULevelStreaming* StreamingLevel, cons
 		Outer->MarkPackageDirty();
 	}
 	return true;
+}
+
+namespace
+{
+	UWorld* OpenModArena()
+	{
+		UWorld* Current = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+		if (GArenaBusy || !Current || GEditor->PlayWorld || Current->GetOutermost()->IsDirty())
+		{
+			return nullptr;
+		}
+		const FString MapPkg = Current->GetOutermost()->GetName();
+		if (IsUnder(FPackageName::GetLongPackagePath(MapPkg), NormDir(Settings()->TemplateRoot.Path)))
+		{
+			return nullptr;
+		}
+		for (const FString& Level : UAEWArenaTools::GetArenaLevelNames())
+		{
+			FString Pkg = Level;
+			Pkg.Split(TEXT("."), &Pkg, nullptr);
+			if (Pkg.Equals(MapPkg, ESearchCase::IgnoreCase))
+			{
+				return Current;
+			}
+		}
+		return nullptr;
+	}
+
+	bool IsBarricadeSet(AActor* Actor)
+	{
+		if (!Actor || !Actor->GetClass()->GetName().Contains(TEXT("Barricade")))
+		{
+			return false;
+		}
+		int32 Children = 0;
+		TInlineComponentArray<UActorComponent*> Components(Actor);
+		for (UActorComponent* C : Components)
+		{
+			if (UChildActorComponent* Child = Cast<UChildActorComponent>(C))
+			{
+				Children += Child->GetChildActorClass() ? 1 : 0;
+			}
+			else if (Cast<UPrimitiveComponent>(C))
+			{
+				return false;
+			}
+		}
+		return Children > 0;
+	}
+}
+
+namespace
+{
+	bool IsBarricadePiece(AActor* Actor)
+	{
+		if (!Actor || !Actor->GetClass()->GetName().Contains(TEXT("Barricade")))
+		{
+			return false;
+		}
+		TInlineComponentArray<UBoxComponent*> Boxes(Actor);
+		for (UBoxComponent* B : Boxes)
+		{
+			if (B->GetFName() == TEXT("CollisionReactionArea"))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	const TCHAR* BarricadeGroupPrefix = TEXT("AEWBarricadeGroup:");
+
+	void AddBarricadeGroup(UWorld* World, TArray<AActor*>& Actors)
+	{
+		TSet<FName> Groups;
+		for (AActor* A : Actors)
+		{
+			for (const FName& Tag : A->Tags)
+			{
+				if (Tag.ToString().StartsWith(BarricadeGroupPrefix))
+				{
+					Groups.Add(Tag);
+				}
+			}
+		}
+		if (Groups.Num() == 0 || !World)
+		{
+			return;
+		}
+		for (TActorIterator<AActor> It(World); It; ++It)
+		{
+			for (const FName& Tag : It->Tags)
+			{
+				if (Groups.Contains(Tag))
+				{
+					Actors.AddUnique(*It);
+				}
+			}
+		}
+	}
+
+	void SetActorArray(UObject* Object, const FName Name, const TArray<AActor*>& Items)
+	{
+		FArrayProperty* Array = Object ? FindFProperty<FArrayProperty>(Object->GetClass(), Name) : nullptr;
+		FObjectProperty* Inner = Array ? CastField<FObjectProperty>(Array->Inner) : nullptr;
+		if (!Inner)
+		{
+			return;
+		}
+		FScriptArrayHelper Helper(Array, Array->ContainerPtrToValuePtr<void>(Object));
+		Helper.Resize(Items.Num());
+		for (int32 i = 0; i < Items.Num(); ++i)
+		{
+			Inner->SetObjectPropertyValue(Helper.GetRawPtr(i), Items[i]);
+		}
+	}
+
+	bool IsBarricadeGuard(AActor* Actor)
+	{
+		return Actor && Actor->GetClass()->GetName() == TEXT("BP_BarricadeGuard_C");
+	}
+
+	const TCHAR* BarricadeSettingsPrefix = TEXT("AEWBarricadeSettings:");
+
+	UClass* LoadBarricadePieceClass(TArray<FString>& Tried)
+	{
+		UClass* PieceClass = nullptr;
+		const FString Base = TEXT("/Game/GameData/Resources/Models/EmvData/Arean/Common/Barricade/");
+		for (const FString& Path : { Settings()->BarricadeClass.ToString(), Base + TEXT("0000_Base/BP_Barricade.BP_Barricade_C"), Base + TEXT("0001_Dynamite/BP_Barricade_0001.BP_Barricade_0001_C"), Base + TEXT("0001_Dynamite/BP_Barricade_Long_0001.BP_Barricade_Long_0001_C") })
+		{
+			if (!PieceClass && !Path.IsEmpty() && !Tried.Contains(Path))
+			{
+				Tried.Add(Path);
+				PieceClass = FSoftClassPath(Path).TryLoadClass<AActor>();
+			}
+		}
+		return PieceClass;
+	}
+
+	UClass* BarricadeBaseClass(UClass* PieceClass)
+	{
+		UClass* Base = PieceClass;
+		for (UClass* C = PieceClass; C; C = C->GetSuperClass())
+		{
+			if (C->FindPropertyByName(TEXT("BarricadeCondition")) && C->FindFunctionByName(TEXT("ResetShake"), EIncludeSuperFlag::ExcludeSuper))
+			{
+				Base = C;
+			}
+		}
+		return Base;
+	}
+
+	TSet<FString> GRebuiltGuardFolders;
+
+	AActor* SpawnBarricadeSettings(UWorld* World, ULevel* Level, UClass* PieceClass, const TArray<AActor*>& Pieces, const TArray<AActor*>& Meshes,
+		const FName Group, const FString& Label, const FName Folder, const FTransform& Where, bool bClimbable)
+	{
+		const FString ArenaFolder = FPackageName::GetLongPackagePath(World->GetOutermost()->GetName());
+		const bool bRebuild = !GRebuiltGuardFolders.Contains(ArenaFolder);
+		UBlueprint* GuardBP = UAEWArenaTools::EnsureBarricadeGuardBlueprint(ArenaFolder, BarricadeBaseClass(PieceClass), bRebuild);
+		if (!GuardBP || !GuardBP->GeneratedClass)
+		{
+			return nullptr;
+		}
+		GRebuiltGuardFolders.Add(ArenaFolder);
+		FActorSpawnParameters Params;
+		Params.OverrideLevel = Level;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AActor* Guard = World->SpawnActor<AActor>(GuardBP->GeneratedClass, FTransform(Where.GetRotation(), Where.GetLocation()), Params);
+		if (!Guard)
+		{
+			return nullptr;
+		}
+		SetActorArray(Guard, TEXT("Pieces"), Pieces);
+		SetActorArray(Guard, TEXT("Meshes"), Meshes);
+		if (FBoolProperty* Climb = FindFProperty<FBoolProperty>(Guard->GetClass(), TEXT("bCanBeClimbed")))
+		{
+			Climb->SetPropertyValue_InContainer(Guard, bClimbable);
+		}
+		Guard->Tags.AddUnique(Group);
+		for (AActor* P : Pieces)
+		{
+			P->Modify();
+			P->Tags.AddUnique(Group);
+		}
+		Guard->SetActorLabel(Label + TEXT("_Settings"));
+		Guard->SetFolderPath(Folder);
+		Guard->PostEditChange();
+		return Guard;
+	}
+
+	FBoolProperty* NoClimbProperty(UClass* Class)
+	{
+		return Class ? FindFProperty<FBoolProperty>(Class, FName(TEXT("\u767b\u308c\u306a\u3044"))) : nullptr;
+	}
+
+	void GatherWorldVerts(UStaticMeshComponent* SM, TArray<FVector>& Out)
+	{
+		UStaticMesh* Mesh = SM ? SM->GetStaticMesh() : nullptr;
+		FStaticMeshRenderData* Render = Mesh ? Mesh->RenderData.Get() : nullptr;
+		const FTransform T = SM ? SM->GetComponentTransform() : FTransform::Identity;
+		if (Render && Render->LODResources.Num() > 0)
+		{
+			const FPositionVertexBuffer& Positions = Render->LODResources[0].VertexBuffers.PositionVertexBuffer;
+			const int32 Count = Positions.GetNumVertices();
+			UE_LOG(LogAEWArena, Log, TEXT("Make Barricade: %s LOD0 has %d vertices, CPU data %s"), *Mesh->GetName(), Count, Positions.GetVertexData() ? TEXT("yes") : TEXT("no"));
+			if (Count > 0 && Positions.GetVertexData())
+			{
+				const int32 Step = FMath::Max(1, Count / 20000);
+				for (int32 i = 0; i < Count; i += Step)
+				{
+					Out.Add(T.TransformPosition(Positions.VertexPosition(i)));
+				}
+				return;
+			}
+		}
+		if (Mesh)
+		{
+			const FBox B = Mesh->GetBoundingBox();
+			for (int32 i = 0; i < 8; ++i)
+			{
+				Out.Add(T.TransformPosition(FVector((i & 1) ? B.Max.X : B.Min.X, (i & 2) ? B.Max.Y : B.Min.Y, (i & 4) ? B.Max.Z : B.Min.Z)));
+			}
+		}
+	}
+
+	bool FitBarricadeFrame(const TArray<FVector>& Verts, const FVector& RingLocation, FTransform& OutFrame, FBox& OutLocalBox)
+	{
+		if (Verts.Num() == 0)
+		{
+			return false;
+		}
+		float BestArea = TNumericLimits<float>::Max();
+		float BestYaw = 0.f;
+		for (int32 Deg = 0; Deg < 180; ++Deg)
+		{
+			const float C = FMath::Cos(FMath::DegreesToRadians(float(Deg)));
+			const float S = FMath::Sin(FMath::DegreesToRadians(float(Deg)));
+			float MinX = TNumericLimits<float>::Max(), MaxX = -MinX, MinY = MinX, MaxY = -MinX;
+			for (const FVector& V : Verts)
+			{
+				const float X = V.X * C + V.Y * S;
+				const float Y = -V.X * S + V.Y * C;
+				MinX = FMath::Min(MinX, X); MaxX = FMath::Max(MaxX, X);
+				MinY = FMath::Min(MinY, Y); MaxY = FMath::Max(MaxY, Y);
+			}
+			const float Area = (MaxX - MinX) * (MaxY - MinY);
+			if (Area < BestArea - 0.01f || (FMath::IsNearlyEqual(Area, BestArea, 0.01f) && (MaxX - MinX) >= (MaxY - MinY)))
+			{
+				BestArea = Area;
+				BestYaw = (MaxX - MinX) >= (MaxY - MinY) ? float(Deg) : float(Deg) + 90.f;
+			}
+		}
+		FRotator Rot(0.f, BestYaw, 0.f);
+		FBox Box(ForceInit);
+		for (const FVector& V : Verts)
+		{
+			Box += Rot.UnrotateVector(V);
+		}
+		const FVector Base = Rot.RotateVector(FVector(Box.GetCenter().X, Box.GetCenter().Y, Box.Min.Z));
+		FVector ToRing = RingLocation - Base;
+		ToRing.Z = 0.f;
+		if (!ToRing.IsNearlyZero() && FVector::DotProduct(Rot.RotateVector(FVector::RightVector), ToRing) < 0.f)
+		{
+			Rot.Yaw += 180.f;
+		}
+		Rot.Normalize();
+		OutFrame = FTransform(Rot, Base);
+		OutLocalBox = FBox(ForceInit);
+		for (const FVector& V : Verts)
+		{
+			OutLocalBox += OutFrame.InverseTransformPosition(V);
+		}
+		return true;
+	}
+
+}
+
+int32 UAEWArenaTools::MakeBarricadeFromSelected()
+{
+	UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+	const FText Title = LOCTEXT("MakeBarricadeTitle", "Make Barricade From Selected");
+	if (!World || GEditor->PlayWorld)
+	{
+		return 0;
+	}
+	TArray<AActor*> Sources;
+	for (FSelectionIterator It(GEditor->GetSelectedActorIterator()); It; ++It)
+	{
+		AActor* A = Cast<AActor>(*It);
+		if (!A || IsBarricadePiece(A))
+		{
+			continue;
+		}
+		if (A->Tags.ContainsByPredicate([](const FName& T) { return T.ToString().StartsWith(BarricadeGroupPrefix); }))
+		{
+			UE_LOG(LogAEWArena, Warning, TEXT("%s is already a barricade - run Restore Meshes From Barricades first to remake it"), *A->GetActorLabel());
+			continue;
+		}
+		TInlineComponentArray<UStaticMeshComponent*> Meshes(A);
+		if (Meshes.Num() > 0)
+		{
+			Sources.Add(A);
+		}
+	}
+	if (Sources.Num() == 0)
+	{
+		FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("MakeBarricadeNone", "Select one or more mesh actors (e.g. FamilyMart_FM_board) in the level first."), &Title);
+		return 0;
+	}
+
+	TArray<FString> Tried;
+	UClass* PieceClass = LoadBarricadePieceClass(Tried);
+	if (!PieceClass)
+	{
+		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("No barricade class could be loaded. Set Barricade Class (Project Settings > Arena Maker) to a barricade blueprint in the project. Tried:\n  ") + FString::Join(Tried, TEXT("\n  "))), &Title);
+		return 0;
+	}
+	if (Tried.Num() > 1)
+	{
+		UE_LOG(LogAEWArena, Warning, TEXT("Barricade Class %s could not be loaded - using %s"), *Settings()->BarricadeClass.ToString(), *PieceClass->GetPathName());
+	}
+
+	FVector RingLocation = FVector::ZeroVector;
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		if (It->GetClass()->GetName() == TEXT("BP_Ring_C"))
+		{
+			RingLocation = It->GetActorLocation();
+			break;
+		}
+	}
+
+	int32 Made = 0;
+	TArray<FString> Report;
+	const FScopedTransaction Transaction(Title);
+	for (AActor* Source : Sources)
+	{
+		ULevel* Level = Source->GetLevel();
+		Level->Modify();
+		TArray<FVector> Verts;
+		TInlineComponentArray<UStaticMeshComponent*> FrameMeshes(Source);
+		for (UStaticMeshComponent* SM : FrameMeshes)
+		{
+			GatherWorldVerts(SM, Verts);
+		}
+		FTransform PieceTransform(Source->GetActorRotation(), Source->GetActorLocation());
+		FBox FittedBox(ForceInit);
+		const bool bFitted = FitBarricadeFrame(Verts, RingLocation, PieceTransform, FittedBox);
+		auto SpawnPiece = [&](const FTransform& Where, USkeletalMeshComponent*& OutMesh) -> AActor*
+		{
+			FActorSpawnParameters Params;
+			Params.OverrideLevel = Level;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			AActor* P = World->SpawnActor<AActor>(PieceClass, Where, Params);
+			OutMesh = P ? Cast<USkeletalMeshComponent>(P->GetRootComponent()) : nullptr;
+			if (P && !OutMesh)
+			{
+				TInlineComponentArray<USkeletalMeshComponent*> Skels(P);
+				OutMesh = Skels.Num() > 0 ? Skels[0] : nullptr;
+			}
+			if (P && !OutMesh)
+			{
+				World->EditorDestroyActor(P, true);
+				return nullptr;
+			}
+			if (P)
+			{
+				P->Modify();
+				P->SetActorTransform(Where);
+			}
+			return P;
+		};
+
+		bool bNoCollision = false;
+		int32 MeshCount = 0;
+		TInlineComponentArray<UStaticMeshComponent*> SourceMeshes(Source);
+		for (UStaticMeshComponent* SM : SourceMeshes)
+		{
+			if (!SM->GetStaticMesh())
+			{
+				continue;
+			}
+			++MeshCount;
+			UBodySetup* Body = SM->GetStaticMesh()->GetBodySetup();
+			bNoCollision = bNoCollision || SM->GetCollisionEnabled() == ECollisionEnabled::NoCollision || !Body
+				|| (Body->AggGeom.GetElementCount() == 0 && Body->CollisionTraceFlag != CTF_UseComplexAsSimple);
+		}
+		if (MeshCount == 0 || !bFitted)
+		{
+			Report.Add(Source->GetActorLabel() + TEXT(": has no static mesh to measure"));
+			continue;
+		}
+
+		USkeletalMeshComponent* FirstMesh = nullptr;
+		AActor* First = SpawnPiece(PieceTransform, FirstMesh);
+		if (!First)
+		{
+			Report.Add(Source->GetActorLabel() + TEXT(": could not create a barricade piece"));
+			continue;
+		}
+		const FBoxSphereBounds OldBounds = FirstMesh->SkeletalMesh ? FirstMesh->SkeletalMesh->GetBounds() : FBoxSphereBounds(FVector(0.f, 0.f, 55.f), FVector(138.f, 28.f, 55.f), 150.f);
+
+		const float Length = FittedBox.GetSize().X;
+		const float Segment = FMath::Max(OldBounds.BoxExtent.X * 2.f, 1.f);
+		const int32 Count = Length > Segment * 1.5f ? FMath::Max(1, FMath::RoundToInt(Length / Segment)) : 1;
+		UE_LOG(LogAEWArena, Log, TEXT("Make Barricade: %s - %d vertices, frame %s, local box %s, barricade bounds origin %s extent %s, length %.1f, %d piece(s)"),
+			*Source->GetActorLabel(), Verts.Num(), *PieceTransform.ToString(), *FittedBox.ToString(),
+			*OldBounds.Origin.ToString(), *OldBounds.BoxExtent.ToString(), Length, Count);
+		auto SegmentTransform = [&](int32 i)
+		{
+			const float X = FittedBox.Min.X + (i + 0.5f) * Length / Count;
+			return FTransform(FVector(X, 0.f, 0.f)) * PieceTransform;
+		};
+		const float HalfSection = 0.5f * Length / Count;
+		const float Height = FMath::Max(FittedBox.Max.Z, 1.f);
+
+		const FString Label = Source->GetActorLabel() + TEXT("_Barricade");
+		const FName Group(*(FString(BarricadeGroupPrefix) + Label));
+		bool bClimbWarned = false;
+		auto Finish = [&](AActor* P, USkeletalMeshComponent* Mesh, const FString& PieceLabel)
+		{
+			Mesh->Modify();
+			Mesh->SetSkeletalMesh(nullptr);
+			Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			const float LengthScale = HalfSection / FMath::Max(OldBounds.BoxExtent.X, 1.f);
+			const float HeightScale = Height / FMath::Max(OldBounds.Origin.Z + OldBounds.BoxExtent.Z, 1.f);
+			TInlineComponentArray<UBoxComponent*> Boxes(P);
+			for (UBoxComponent* B : Boxes)
+			{
+				if (B->GetAttachParent() != Mesh)
+				{
+					continue;
+				}
+				B->Modify();
+				const FQuat Rot = B->GetRelativeRotation().Quaternion();
+				const FVector Scale = B->GetRelativeScale3D().GetAbs().ComponentMax(FVector(KINDA_SMALL_NUMBER));
+				const FVector RootExt = Rot.RotateVector(B->GetUnscaledBoxExtent() * Scale).GetAbs();
+				const FVector NewRootExt(RootExt.X * LengthScale, RootExt.Y, RootExt.Z * HeightScale);
+				B->SetBoxExtent(Rot.UnrotateVector(NewRootExt).GetAbs() / Scale);
+				const FVector Loc = B->GetRelativeLocation();
+				B->SetRelativeLocation(FVector(Loc.X * LengthScale, Loc.Y, Loc.Z * HeightScale));
+			}
+			if (FBoolProperty* NoClimb = NoClimbProperty(P->GetClass()))
+			{
+				NoClimb->SetPropertyValue_InContainer(P, true);
+			}
+			else if (!bClimbWarned)
+			{
+				bClimbWarned = true;
+				UE_LOG(LogAEWArena, Warning, TEXT("%s has no cannot-climb variable - %s can still be climbed"), *PieceClass->GetName(), *Source->GetActorLabel());
+			}
+			P->Tags.AddUnique(Group);
+			P->SetActorLabel(PieceLabel);
+			P->SetFolderPath(Source->GetFolderPath());
+			P->PostEditChange();
+		};
+
+		First->SetActorTransform(SegmentTransform(0));
+		Finish(First, FirstMesh, Label);
+		TArray<AActor*> Pieces = { First };
+		int32 Filled = 1;
+		for (int32 i = 1; i < Count; ++i)
+		{
+			USkeletalMeshComponent* FillMesh = nullptr;
+			AActor* Fill = SpawnPiece(SegmentTransform(i), FillMesh);
+			if (!Fill)
+			{
+				continue;
+			}
+			Finish(Fill, FillMesh, FString::Printf(TEXT("%s_Fill%d"), *Label, i));
+			Pieces.Add(Fill);
+			++Filled;
+		}
+
+		const bool bGuarded = SpawnBarricadeSettings(World, Level, PieceClass, Pieces, { Source }, Group, Label, Source->GetFolderPath(), PieceTransform, false) != nullptr;
+		if (!bGuarded)
+		{
+			UE_LOG(LogAEWArena, Warning, TEXT("%s: could not add the barricade settings actor - knock-down settings won't apply"), *Source->GetActorLabel());
+		}
+
+		Source->Modify();
+		Source->Tags.AddUnique(Group);
+		++Made;
+		Report.Add(FString::Printf(TEXT("%s -> %d x %s (%s)%s"), *Source->GetActorLabel(), Filled, *PieceClass->GetName(), *Label,
+			bNoCollision ? TEXT(" - the mesh has no collision, so wrestlers may walk through it; add collision in the Static Mesh editor") : TEXT("")));
+	}
+	GEditor->SelectNone(true, true);
+	GEditor->RedrawLevelEditingViewports();
+	if (Made > 0 || Report.Num() > 0)
+	{
+		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(FString::Printf(TEXT("%d barricade(s) made:\n  %s\n\nYour mesh stays as it is; invisible barricade pieces (one per barricade length, no barricade model) were placed along it, facing the ring, with their reaction, hit and weapon boxes fitted to each section. Settings are on the <name>_Barricade_Settings actor - its Details (Arena Override section) has Can Be Climbed (off to start with), Allow Barricade Moves, Can Be Knocked Down and Starts Down. Save the map to keep it."), Made, *FString::Join(Report, TEXT("\n  ")))), &Title);
+	}
+	return Made;
+}
+
+int32 UAEWArenaTools::RestoreMeshesFromBarricades()
+{
+	UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+	const FText Title = LOCTEXT("RestoreMeshesTitle", "Restore Meshes From Barricades");
+	if (!World || GEditor->PlayWorld)
+	{
+		return 0;
+	}
+	auto MeshesOf = [](AActor* A)
+	{
+		TArray<UStaticMeshComponent*> Out;
+		if (A && IsBarricadePiece(A))
+		{
+			for (UActorComponent* C : A->GetInstanceComponents())
+			{
+				UStaticMeshComponent* SM = Cast<UStaticMeshComponent>(C);
+				if (SM && SM->GetStaticMesh())
+				{
+					Out.Add(SM);
+				}
+			}
+		}
+		return Out;
+	};
+	auto IsGrouped = [](AActor* A)
+	{
+		return A && A->Tags.ContainsByPredicate([](const FName& T) { return T.ToString().StartsWith(BarricadeGroupPrefix); });
+	};
+	TArray<AActor*> Targets;
+	for (FSelectionIterator It(GEditor->GetSelectedActorIterator()); It; ++It)
+	{
+		AActor* A = Cast<AActor>(*It);
+		if (IsGrouped(A) || MeshesOf(A).Num() > 0)
+		{
+			Targets.Add(A);
+		}
+	}
+	if (Targets.Num() == 0)
+	{
+		for (TActorIterator<AActor> It(World); It; ++It)
+		{
+			if (IsGrouped(*It) || MeshesOf(*It).Num() > 0)
+			{
+				Targets.Add(*It);
+			}
+		}
+	}
+	AddBarricadeGroup(World, Targets);
+	int32 PieceCount = 0;
+	for (AActor* A : Targets)
+	{
+		PieceCount += IsBarricadePiece(A) ? 1 : 0;
+	}
+	if (PieceCount == 0)
+	{
+		FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("RestoreMeshesNone", "No barricades made from your meshes were found in this level."), &Title);
+		return 0;
+	}
+	if (FMessageDialog::Open(EAppMsgType::OkCancel, FText::FromString(FString::Printf(TEXT("Remove %d barricade piece(s) made from your meshes and keep (or bring back) the plain meshes?"), PieceCount)), &Title) != EAppReturnType::Ok)
+	{
+		return 0;
+	}
+
+	const FScopedTransaction Transaction(Title);
+	int32 Restored = 0;
+	TArray<FString> Names;
+	for (AActor* A : Targets)
+	{
+		if (!IsValid(A))
+		{
+			continue;
+		}
+		if (IsBarricadeGuard(A))
+		{
+			World->EditorDestroyActor(A, true);
+			continue;
+		}
+		if (!IsBarricadePiece(A))
+		{
+			A->Modify();
+			A->Tags.RemoveAll([](const FName& T) { return T.ToString().StartsWith(BarricadeGroupPrefix); });
+			Names.AddUnique(A->GetActorLabel());
+			continue;
+		}
+		ULevel* Level = A->GetLevel();
+		Level->Modify();
+		FString Label = A->GetActorLabel();
+		Label.RemoveFromEnd(TEXT("_Barricade"));
+		const TArray<UStaticMeshComponent*> Meshes = MeshesOf(A);
+		int32 Index = 0;
+		for (UStaticMeshComponent* SM : Meshes)
+		{
+			FActorSpawnParameters Params;
+			Params.OverrideLevel = Level;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), SM->GetComponentTransform(), Params);
+			if (!Actor)
+			{
+				continue;
+			}
+			UStaticMeshComponent* Out = Actor->GetStaticMeshComponent();
+			Out->SetMobility(SM->Mobility);
+			Out->SetStaticMesh(SM->GetStaticMesh());
+			for (int32 i = 0; i < SM->GetNumOverrideMaterials(); ++i)
+			{
+				Out->SetMaterial(i, SM->OverrideMaterials[i]);
+			}
+			Out->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+			Actor->SetActorTransform(SM->GetComponentTransform());
+			Actor->SetActorLabel(Meshes.Num() > 1 ? FString::Printf(TEXT("%s_%d"), *Label, Index) : Label);
+			Actor->SetFolderPath(A->GetFolderPath());
+			Actor->PostEditChange();
+			++Index;
+		}
+		if (Index > 0)
+		{
+			Names.AddUnique(Label);
+		}
+		World->EditorDestroyActor(A, true);
+		++Restored;
+	}
+	GEditor->SelectNone(true, true);
+	GEditor->RedrawLevelEditingViewports();
+	Notify(FString::Printf(TEXT("Removed %d barricade piece(s); plain meshes: %s. Save the map to keep it."), Restored, *FString::Join(Names, TEXT(", "))));
+	return Restored;
+}
+
+int32 UAEWArenaTools::AddBarricadeSettingsToSelected()
+{
+	UWorld* World = GEditor ? GEditor->GetEditorWorldContext().World() : nullptr;
+	const FText Title = LOCTEXT("AddBarricadeSettingsTitle", "Add Barricade Settings To Selected");
+	if (!World || GEditor->PlayWorld)
+	{
+		return 0;
+	}
+	TArray<AActor*> Pieces;
+	int32 AlreadyCovered = 0;
+	for (FSelectionIterator It(GEditor->GetSelectedActorIterator()); It; ++It)
+	{
+		AActor* A = Cast<AActor>(*It);
+		if (!A || !IsBarricadePiece(A))
+		{
+			continue;
+		}
+		if (A->Tags.ContainsByPredicate([](const FName& T) { return T.ToString().StartsWith(BarricadeGroupPrefix) || T.ToString().StartsWith(BarricadeSettingsPrefix); }))
+		{
+			++AlreadyCovered;
+			continue;
+		}
+		Pieces.Add(A);
+	}
+	if (Pieces.Num() == 0)
+	{
+		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(AlreadyCovered > 0
+			? FString(TEXT("The selected barricade pieces already have a Settings actor."))
+			: FString(TEXT("Select one or more barricade pieces in the level first (e.g. the pieces of a split barricade set)."))), &Title);
+		return 0;
+	}
+	FVector Center = FVector::ZeroVector;
+	for (AActor* P : Pieces)
+	{
+		Center += P->GetActorLocation();
+	}
+	Center /= Pieces.Num();
+	FBoolProperty* NoClimb = NoClimbProperty(Pieces[0]->GetClass());
+	const bool bClimbable = !NoClimb || !NoClimb->GetPropertyValue_InContainer(Pieces[0]);
+	const FString Label = Pieces.Num() == 1 ? Pieces[0]->GetActorLabel() : Pieces[0]->GetActorLabel() + FString::Printf(TEXT("_x%d"), Pieces.Num());
+	const FScopedTransaction Transaction(Title);
+	Pieces[0]->GetLevel()->Modify();
+	AActor* Guard = SpawnBarricadeSettings(World, Pieces[0]->GetLevel(), Pieces[0]->GetClass(), Pieces, {}, FName(*(FString(BarricadeSettingsPrefix) + Label)), Label, Pieces[0]->GetFolderPath(), FTransform(Center), bClimbable);
+	if (!Guard)
+	{
+		FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("AddBarricadeSettingsFailed", "Could not create the barricade settings blueprint - see the Output Log."), &Title);
+		return 0;
+	}
+	GEditor->SelectNone(true, true);
+	GEditor->SelectActor(Guard, true, true);
+	Notify(FString::Printf(TEXT("Added %s for %d barricade piece(s) - its Details (Arena Override section) has Can Be Climbed, Allow Barricade Moves, Can Be Knocked Down and Starts Down. Save the map to keep it."), *Guard->GetActorLabel(), Pieces.Num()));
+	return Pieces.Num();
+}
+
+bool UAEWArenaTools::IsConvertingArenas()
+{
+	return GArenaPassQuiet;
+}
+
+int32 UAEWArenaTools::ConvertExistingArenas()
+{
+	UAEWArenaTemplateSettings* S = GetMutableDefault<UAEWArenaTemplateSettings>();
+	if (S->bExistingArenasConverted || GArenaBusy || GArenaPassQuiet || !GEditor || GEditor->PlayWorld)
+	{
+		return 0;
+	}
+	UWorld* Current = GEditor->GetEditorWorldContext().World();
+	if (Current && Current->GetOutermost()->IsDirty())
+	{
+		return 0;
+	}
+	const FString Restore = Current && FPackageName::DoesPackageExist(Current->GetOutermost()->GetName()) ? Current->GetOutermost()->GetName() : FString();
+	const FString Root = NormDir(S->TemplateRoot.Path);
+	TArray<FString> Maps;
+	for (const FString& Level : GetArenaLevelNames())
+	{
+		FString Pkg = Level;
+		Pkg.Split(TEXT("."), &Pkg, nullptr);
+		if (Pkg.StartsWith(TEXT("/")) && !IsUnder(FPackageName::GetLongPackagePath(Pkg), Root) && FPackageName::DoesPackageExist(Pkg))
+		{
+			Maps.AddUnique(Pkg);
+		}
+	}
+
+	int32 Sublevels = 0;
+	int32 Pieces = 0;
+	TArray<FString> Changed;
+	{
+		TGuardValue<bool> Quiet(GArenaPassQuiet, true);
+		FScopedSlowTask Task(Maps.Num(), LOCTEXT("ConvertingArenas", "Updating existing arenas (shared sublevels, barricade sets)"));
+		Task.MakeDialog();
+		for (const FString& Map : Maps)
+		{
+			Task.EnterProgressFrame(1.f, FText::FromString(FPackageName::GetShortName(Map)));
+			if (!FEditorFileUtils::LoadMap(FPackageName::LongPackageNameToFilename(Map, FPackageName::GetMapPackageExtension()), false, true))
+			{
+				UE_LOG(LogAEWArena, Warning, TEXT("one-time pass: could not open %s"), *Map);
+				continue;
+			}
+			const int32 Own = MakeSharedSublevelsOwn();
+			const int32 Split = SplitBarricadeSets();
+			Sublevels += Own;
+			Pieces += Split;
+			if (Own > 0 || Split > 0)
+			{
+				Changed.Add(FString::Printf(TEXT("%s (%d sublevel(s), %d barricade piece(s))"), *FPackageName::GetShortName(Map), Own, Split));
+			}
+		}
+		if (Restore.IsEmpty())
+		{
+			UEditorLoadingAndSavingUtils::NewBlankMap(false);
+		}
+		else
+		{
+			FEditorFileUtils::LoadMap(FPackageName::LongPackageNameToFilename(Restore, FPackageName::GetMapPackageExtension()), false, true);
+		}
+	}
+
+	S->bExistingArenasConverted = true;
+	S->SaveConfig();
+	S->UpdateDefaultConfigFile();
+	UE_LOG(LogAEWArena, Log, TEXT("one-time pass over %d arena(s): %d updated"), Maps.Num(), Changed.Num());
+	for (const FString& Line : Changed)
+	{
+		UE_LOG(LogAEWArena, Log, TEXT("  %s"), *Line);
+	}
+	if (Changed.Num() > 0)
+	{
+		Notify(FString::Printf(TEXT("Existing arenas updated once: %d shared sublevel(s) copied, %d barricade piece(s) split.\n%s"), Sublevels, Pieces, *FString::Join(Changed, TEXT("\n"))));
+	}
+	return Changed.Num();
+}
+
+int32 UAEWArenaTools::SplitBarricadeSets()
+{
+	UWorld* World = OpenModArena();
+	if (!World)
+	{
+		return 0;
+	}
+	const FString Folder = FPackageName::GetLongPackagePath(World->GetOutermost()->GetName());
+	TArray<AActor*> Sets;
+	TArray<FString> Skipped;
+	for (ULevel* Level : World->GetLevels())
+	{
+		if (!Level || FPackageName::GetLongPackagePath(Level->GetOutermost()->GetName()) != Folder)
+		{
+			continue;
+		}
+		for (AActor* A : Level->Actors)
+		{
+			if (!A || A->IsChildActor() || !A->GetClass()->GetName().Contains(TEXT("Barricade")))
+			{
+				continue;
+			}
+			if (IsBarricadeSet(A))
+			{
+				Sets.Add(A);
+			}
+			else
+			{
+				TInlineComponentArray<UChildActorComponent*> Children(A);
+				if (Children.Num() > 0)
+				{
+					Skipped.Add(A->GetActorLabel());
+				}
+			}
+		}
+	}
+	for (const FString& Name : Skipped)
+	{
+		UE_LOG(LogAEWArena, Warning, TEXT("%s holds meshes as well as barricade pieces - left as one actor"), *Name);
+	}
+	if (Sets.Num() == 0)
+	{
+		return 0;
+	}
+	for (ULevel* Level : World->GetLevels())
+	{
+		if (Level && Level->GetOutermost()->IsDirty())
+		{
+			return 0;
+		}
+	}
+
+	TGuardValue<bool> Busy(GArenaBusy, true);
+	int32 Pieces = 0;
+	TSet<UPackage*> Changed;
+	FString Done;
+	{
+		const FScopedTransaction Transaction(LOCTEXT("SplitBarricades", "Split Barricade Sets"));
+		for (AActor* Set : Sets)
+		{
+			ULevel* Level = Set->GetLevel();
+			const FString SetLabel = Set->GetActorLabel();
+			const FName SetFolder = Set->GetFolderPath();
+			const FName PieceFolder = SetFolder.IsNone() ? FName(*SetLabel) : FName(*(SetFolder.ToString() + TEXT("/") + SetLabel));
+			Level->Modify();
+			int32 Count = 0;
+			TArray<AActor*> SetPieces;
+			TInlineComponentArray<UChildActorComponent*> Children(Set);
+			for (UChildActorComponent* Child : Children)
+			{
+				UClass* PieceClass = Child->GetChildActorClass();
+				if (!PieceClass)
+				{
+					continue;
+				}
+				AActor* Source = Child->GetChildActor();
+				const FTransform Where = Source ? Source->GetActorTransform() : Child->GetComponentTransform();
+				FActorSpawnParameters Params;
+				Params.OverrideLevel = Level;
+				Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				AActor* Piece = World->SpawnActor<AActor>(PieceClass, Where, Params);
+				if (!Piece)
+				{
+					UE_LOG(LogAEWArena, Warning, TEXT("could not spawn %s from %s.%s"), *PieceClass->GetName(), *SetLabel, *Child->GetName());
+					continue;
+				}
+				if (Source)
+				{
+					EditorUtilities::CopyActorProperties(Source, Piece, EditorUtilities::FCopyOptions(EditorUtilities::ECopyOptions::OnlyCopyEditOrInterpProperties));
+				}
+				Piece->SetActorTransform(Where);
+				Piece->SetActorLabel(SetLabel + TEXT("_") + Child->GetName());
+				Piece->SetFolderPath(PieceFolder);
+				Piece->PostEditChange();
+				if (IsBarricadePiece(Piece))
+				{
+					SetPieces.Add(Piece);
+				}
+				++Count;
+			}
+			if (Count == 0)
+			{
+				continue;
+			}
+			if (SetPieces.Num() > 0)
+			{
+				SpawnBarricadeSettings(World, Level, SetPieces[0]->GetClass(), SetPieces, {}, FName(*(FString(BarricadeSettingsPrefix) + SetLabel)), SetLabel, PieceFolder, Set->GetActorTransform(), true);
+			}
+			World->EditorDestroyActor(Set, true);
+			Changed.Add(Level->GetOutermost());
+			Pieces += Count;
+			Done += FString::Printf(TEXT("\n  %s -> %d pieces (folder %s)"), *SetLabel, Count, *PieceFolder.ToString());
+			UE_LOG(LogAEWArena, Log, TEXT("split %s into %d barricade pieces"), *SetLabel, Count);
+		}
+	}
+	if (Changed.Num() > 0)
+	{
+		UEditorLoadingAndSavingUtils::SavePackages(Changed.Array(), false);
+		GEditor->RedrawLevelEditingViewports();
+		Notify(FString::Printf(TEXT("Barricade sets split into single pieces you can move, delete or swap:%s\nEach set has a <set>_Settings actor for climbing, barricade moves and knock-down."), *Done));
+	}
+	return Pieces;
+}
+
+int32 UAEWArenaTools::MakeSharedSublevelsOwn()
+{
+	UWorld* Current = OpenModArena();
+	if (!Current)
+	{
+		return 0;
+	}
+	const FString MapPkg = Current->GetOutermost()->GetName();
+	const FString Folder = FPackageName::GetLongPackagePath(MapPkg);
+	const FString MapName = FPackageName::GetShortName(MapPkg);
+
+	TArray<FString> Subs;
+	TArray<FString> Empty;
+	for (ULevelStreaming* LS : Current->GetStreamingLevels())
+	{
+		if (!LS || FPackageName::GetLongPackagePath(LS->GetWorldAssetPackageName()) == Folder || !ShouldOwnShared(LS))
+		{
+			continue;
+		}
+		const FString Sub = LS->GetWorldAssetPackageName();
+		ULevel* Loaded = LS->GetLoadedLevel();
+		UWorld* SubWorld = Loaded ? Cast<UWorld>(Loaded->GetOuter()) : nullptr;
+		(SubWorld && CountActors(SubWorld) <= 2 ? Empty : Subs).Add(Sub);
+	}
+	for (const FString& E : Empty)
+	{
+		UE_LOG(LogAEWArena, Warning, TEXT("%s streams %s, an empty proxy - it stays shared until the template importer fills it"), *MapName, *FPackageName::GetShortName(E));
+	}
+	if (Subs.Num() == 0)
+	{
+		return 0;
+	}
+	for (ULevel* Level : Current->GetLevels())
+	{
+		if (Level && Level->GetOutermost()->IsDirty())
+		{
+			return 0;
+		}
+	}
+
+	TGuardValue<bool> Busy(GArenaBusy, true);
+	UEditorLoadingAndSavingUtils::NewBlankMap(false);
+	UWorld* World = LoadWorld(MapPkg);
+	if (!World)
+	{
+		UE_LOG(LogAEWArena, Error, TEXT("could not load %s"), *MapPkg);
+		FEditorFileUtils::LoadMap(FPackageName::LongPackageNameToFilename(MapPkg, FPackageName::GetMapPackageExtension()), false, true);
+		return 0;
+	}
+	IAssetTools& AssetTools = FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get();
+	TArray<UPackage*> ToSave;
+	TArray<UObject*> Copies;
+	TArray<FString> Loaded;
+	FString Done;
+	for (ULevelStreaming* LS : World->GetStreamingLevels())
+	{
+		const FString Sub = LS ? LS->GetWorldAssetPackageName() : FString();
+		if (!Subs.Contains(Sub))
+		{
+			continue;
+		}
+		Loaded.Add(Sub);
+		const FString NewSub = Folder + TEXT("/") + MapName + TEXT("_") + FPackageName::GetShortName(Sub);
+		if (FPackageName::DoesPackageExist(NewSub))
+		{
+			UE_LOG(LogAEWArena, Warning, TEXT("%s already exists - streaming it instead of copying again"), *NewSub);
+			RepointStreamingLevel(LS, NewSub);
+			Done += TEXT("\n  ") + FPackageName::GetShortName(NewSub) + TEXT(" (already there)");
+			continue;
+		}
+		UWorld* Src = LoadWorld(Sub);
+		if (!Src || CountActors(Src) <= 2)
+		{
+			UE_LOG(LogAEWArena, Warning, TEXT("%s is missing or an empty proxy - kept shared"), *Sub);
+			continue;
+		}
+		UWorld* Dup = Cast<UWorld>(AssetTools.DuplicateAsset(FPackageName::GetShortName(NewSub), Folder, Src));
+		if (!Dup)
+		{
+			UE_LOG(LogAEWArena, Error, TEXT("could not duplicate %s"), *Sub);
+			continue;
+		}
+		ClearBuildData(Dup);
+		ToSave.Add(Dup->GetOutermost());
+		Copies.Add(Dup);
+		Loaded.Add(NewSub);
+		RepointStreamingLevel(LS, NewSub);
+		Done += TEXT("\n  ") + FPackageName::GetShortName(Sub) + TEXT(" -> ") + FPackageName::GetShortName(NewSub);
+		UE_LOG(LogAEWArena, Log, TEXT("%s -> %s"), *Sub, *NewSub);
+	}
+	ToSave.Insert(World->GetOutermost(), 0);
+
+	IAssetRegistry& AR = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
+	TArray<FAssetData> Labels;
+	AR.GetAssetsByPath(FName(*Folder), Labels, false);
+	int32 Chunk = AEWPackaging::Settings()->ChunkId;
+	FString LabelPkg = Folder + TEXT("/PAL_") + MapName;
+	for (const FAssetData& A : Labels)
+	{
+		if (A.AssetClass == UPrimaryAssetLabel::StaticClass()->GetFName())
+		{
+			if (UPrimaryAssetLabel* L = Cast<UPrimaryAssetLabel>(A.GetAsset()))
+			{
+				LabelPkg = A.PackageName.ToString();
+				Chunk = L->Rules.ChunkId;
+			}
+			break;
+		}
+	}
+	if (Copies.Num() > 0)
+	{
+		TArray<FString> PackagingLog;
+		AEWPackaging::UpdateLabel(LabelPkg, Chunk, Copies, true, false, ToSave, &PackagingLog);
+		for (const FString& Line : PackagingLog)
+		{
+			UE_LOG(LogAEWArena, Log, TEXT("%s"), *Line);
+		}
+	}
+	UEditorLoadingAndSavingUtils::SavePackages(ToSave, false);
+	Loaded.Add(MapPkg);
+	World = nullptr;
+	Copies.Reset();
+	UnloadMaps(Loaded);
+	FEditorFileUtils::LoadMap(FPackageName::LongPackageNameToFilename(MapPkg, FPackageName::GetMapPackageExtension()), false, true);
+
+	if (!Done.IsEmpty())
+	{
+		UE_LOG(LogAEWArena, Log, TEXT("%s now streams its own copies of its shared sublevels:%s"), *MapName, *Done.Replace(TEXT("\n"), TEXT(" ")));
+		Notify(FString::Printf(TEXT("%s now has its own copies of its shared sublevels:%s"), *MapName, *Done));
+	}
+	return Done.IsEmpty() ? 0 : Subs.Num();
 }
 
 #undef LOCTEXT_NAMESPACE

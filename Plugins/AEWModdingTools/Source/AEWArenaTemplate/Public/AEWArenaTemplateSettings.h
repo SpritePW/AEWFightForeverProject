@@ -23,9 +23,6 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Arena List", meta = (AllowedClasses = "DataTable", DisplayName = "New Arena Rows Table", ToolTip = "New arena rows are written here. Must be a parent of the Arena Table."))
 	FSoftObjectPath ArenaNewTable;
 
-	UPROPERTY(EditAnywhere, config, Category = "Arena List", meta = (DisplayName = "Full Map Path In LevelName", ToolTip = "Write the map's full package path (/Game/.../17_MyArena) into LevelName. The game looks short names up in .pak file lists only, so a mod map (which lives in a .utoc) is only found by its full path. Sync Arena List converts existing rows."))
-	bool bUseFullLevelPath = true;
-
 	UPROPERTY(EditAnywhere, config, Category = "Arena List", meta = (DisplayName = "Display Name Via Enum Text", ToolTip = "The game shows ST_Name/ST_Key looked up in the localization table. Give the arena's enum entry a localizable display name and point ST_Name/ST_Key at its namespace and key, so the display name needs no string table. Sync Arena List applies it to existing arenas, using their Arena Name."))
 	bool bLocalizedDisplayName = true;
 
@@ -56,11 +53,17 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Removing", meta = (DisplayName = "Renumber Arena IDs", ToolTip = "After removing an arena, close the gap: the mod arenas after it move down one ID (rows, ArenaId, enum entries)."))
 	bool bRenumberOnDelete = true;
 
-	UPROPERTY(EditAnywhere, config, Category = "Removing", meta = (DisplayName = "Rename Maps To New ID", ToolTip = "When an arena's ID changes, rename its <ID>_Name folder, maps, sublevels and label to match."))
-	bool bRenameMapsOnRenumber = true;
-
 	UPROPERTY(EditAnywhere, config, Category = "Level Blueprints", meta = (DisplayName = "Update Level Names In Level Blueprints", ToolTip = "When maps are copied from a template or renamed to a new ID, replace the old map and sublevel names typed into Level Blueprint pins and variable defaults (Load Stream Level, Get Streaming Level, name literals...) and recompile."))
 	bool bFixLevelBlueprints = true;
+
+	UPROPERTY(EditAnywhere, config, Category = "Shared Sublevels", meta = (DisplayName = "Keep Shared", ToolTip = "Always Loaded sublevels a template streams from outside its own folder (ArenaCollider_01, ArenaAudience_01, ArenaLightingSample...) are copied into each new arena so it can change them. Sublevels named here stay shared. Blueprint-streamed sublevels (ArenaVictory, entrance lights...) always stay shared because the game loads them by name."))
+	TArray<FString> KeepSharedSublevels;
+
+	UPROPERTY(EditAnywhere, config, Category = "Barricades", meta = (DisplayName = "Barricade Class", ToolTip = "Game barricade piece Make Barricade From Selected builds on. Its model is removed and your mesh put in its place, so only its behaviour and reaction, hit and weapon boxes are used.", MetaClass = "Actor"))
+	FSoftClassPath BarricadeClass = FSoftClassPath(TEXT("/Game/GameData/Resources/Models/EmvData/Arean/Common/Barricade/0000_Base/BP_Barricade.BP_Barricade_C"));
+
+	UPROPERTY(config)
+	bool bExistingArenasConverted = false;
 
 	UPROPERTY(EditAnywhere, config, Category = "Defaults", meta = (ContentDir, DisplayName = "Template Folder"))
 	FDirectoryPath TemplateRoot;
@@ -71,7 +74,7 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Arena Overrides", meta = (AllowedClasses = "DataTable", DisplayName = "Game Camera Table", ToolTip = "The game's gameplay camera table (DT_GameplayCameraParam). Add Camera Override copies it into the arena folder."))
 	FSoftObjectPath GameCameraTable = FSoftObjectPath(TEXT("/Game/GameData/Assets/DataTable/DT_GameplayCameraParam.DT_GameplayCameraParam"));
 
-	UPROPERTY(EditAnywhere, config, Category = "Arena Overrides", meta = (ClampMin = "1.0", DisplayName = "Camera Zoom-Out Scale", ToolTip = "Applied to the arena's copy of the camera table: RadiusMax_Arena is multiplied by this, RadiusMax_Ring and RadiusMin_Arena by a smaller share of it."))
-	float CameraZoomOutScale = 2.0f;
+	UPROPERTY(EditAnywhere, config, Category = "Arena Overrides", meta = (DisplayName = "Camera Preview Row", ToolTip = "Row of the camera table that Toggle Camera Preview shows."))
+	FName CameraPreviewRow = TEXT("Ring_NM");
 
 };

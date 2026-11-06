@@ -467,7 +467,6 @@ bool EditPartMaker::MakePart(const FEditPartMakerTables& Tables, const FPartRequ
 
 	TArray<UPackage*> Packages = { WA->GetOutermost(), Tables.Parts->GetOutermost(), Tables.Unlock->GetOutermost() };
 	const UAEWModdingSettings* Packaging = AEWPackaging::Settings();
-	if (Packaging->bCreateLabels)
 	{
 		const FString LabelPackage = MeshFolder(Mesh) / (TEXT("PAL_") + R.WAName);
 		AEWPackaging::UpdateLabel(LabelPackage, Packaging->ChunkId, { WA, Mesh }, true, true, Packages, &Log);
@@ -477,12 +476,10 @@ bool EditPartMaker::MakePart(const FEditPartMakerTables& Tables, const FPartRequ
 	if (Settings->bSaveChangesAutomatically)
 	{
 		FEditorFileUtils::PromptForCheckoutAndSave(Packages,  false,  false);
-		Log.Add(FString::Printf(TEXT("saved %d package(s): WA, tables%s"), Packages.Num(), Packaging->bCreateLabels ? TEXT(", labels") : TEXT("")));
+		Log.Add(FString::Printf(TEXT("saved %d package(s): WA, tables%s"), Packages.Num(), TEXT(", labels")));
 	}
 
-	Log.Add(Packaging->bCreateLabels
-		? FString::Printf(TEXT("Package Project puts the part folder %s and the tables in chunk %d."), *MeshFolder(Mesh), Packaging->ChunkId)
-		: TEXT("Cook + pack: ") + MeshFolder(Mesh) + TEXT(" (mesh, materials, textures, WA) and the tables ") + Tables.Parts->GetName() + TEXT(", ") + Tables.Unlock->GetName() + TEXT("."));
+	Log.Add(FString::Printf(TEXT("Package Project puts the part folder %s and the tables in chunk %d."), *MeshFolder(Mesh), Packaging->ChunkId));
 	return true;
 }
 

@@ -10,4 +10,5 @@ UAEWArenaTemplateSettings::UAEWArenaTemplateSettings()
 	UnlockTemplateRow = TEXT("Item9000120");
 	TemplateRoot.Path = TEXT("/Game/GameData/Levels/TemplateLevel");
 	DefaultParentFolder.Path = TEXT("/Game/GameData/Levels/ModLevels");
+	KeepSharedSublevels.Add(TEXT("ArenaMatch"));
 }

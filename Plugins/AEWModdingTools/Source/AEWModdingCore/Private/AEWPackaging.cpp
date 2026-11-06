@@ -133,15 +133,12 @@ namespace AEWPackaging
 				bLabelDirectory ? (bRecursive ? TEXT(", plus its folder and sub-folders") : TEXT(", plus its folder")) : TEXT("")));
 		}
 
-		if (Settings()->bAllowCookingLabelledAssets)
+		TArray<FString> Opened;
+		AllowCooking(PackageName, &Opened);
+		AllowCookingOf(Assets, &Opened);
+		for (const FString& Dir : Opened)
 		{
-			TArray<FString> Opened;
-			AllowCooking(PackageName, &Opened);
-			AllowCookingOf(Assets, &Opened);
-			for (const FString& Dir : Opened)
-			{
-				AddLog(Log, TEXT("Now cookable (removed from 'Directories to never cook'): ") + Dir);
-			}
+			AddLog(Log, TEXT("Now cookable (removed from 'Directories to never cook'): ") + Dir);
 		}
 		return Label;
 	}
@@ -191,10 +188,6 @@ namespace AEWPackaging
 	static TArray<UObject*> PruneUnchangedTables(TArray<UObject*>& All, TArray<FString>* Log)
 	{
 		TArray<UObject*> Dropped;
-		if (!Settings()->bSkipUnchangedTables)
-		{
-			return Dropped;
-		}
 		TSet<UObject*> Drop;
 		TSet<UObject*> Keep;
 		for (UObject* Object : All)
@@ -268,10 +261,6 @@ namespace AEWPackaging
 	UPrimaryAssetLabel* LabelSharedTables(const TArray<UObject*>& Objects, TArray<UPackage*>& ToSave, TArray<FString>* Log)
 	{
 		const UAEWModdingSettings* S = Settings();
-		if (!S->bCreateLabels || !S->bLabelSharedTables)
-		{
-			return nullptr;
-		}
 		TArray<UObject*> All;
 		for (UObject* Object : Objects)
 		{
@@ -332,10 +321,7 @@ namespace AEWPackaging
 				Log->Add(FString::Printf(TEXT("%s, chunk %d: empty"), *Label->GetName(), ChunkId));
 			}
 		}
-		if (Settings()->bAllowCookingLabelledAssets)
-		{
-			AllowCookingOf(Tables, Cookable);
-		}
+		AllowCookingOf(Tables, Cookable);
 	}
 
 	int32 RebuildTableLabels(TArray<FString>& Log)
@@ -365,25 +351,23 @@ namespace AEWPackaging
 		}
 
 		TArray<UObject*> All;
-		if (S->bRebuildAllTables)
+		for (UDataTable* Table : Tables)
 		{
-			for (UDataTable* Table : Tables)
+			if (IsNewTable(Table))
 			{
 				All.AddUnique(Table);
 			}
-		}
-		else
-		{
-			for (UDataTable* Table : Tables)
+			else if (Cast<UCompositeDataTable>(Table) && AEWTables::GetParents(Table).ContainsByPredicate([](UDataTable* P) { return IsNewTable(P); }))
 			{
-				if (IsNewTable(Table))
-				{
-					All.AddUnique(Table);
-				}
-				else if (Cast<UCompositeDataTable>(Table) && AEWTables::GetParents(Table).ContainsByPredicate([](UDataTable* P) { return IsNewTable(P); }))
-				{
-					CollectWithParents(Table, All);
-				}
+				CollectWithParents(Table, All);
+			}
+		}
+
+		for (const FSoftObjectPath& Path : S->AlwaysLabelTables)
+		{
+			if (UDataTable* Table = Cast<UDataTable>(Path.TryLoad()))
+			{
+				All.AddUnique(Table);
 			}
 		}
 
@@ -550,6 +534,17 @@ namespace AEWPackaging
 			Chunks.Add(Chunks[0] + 1);
 		}
 		UChunkDependencyInfo* Info = GetMutableDefault<UChunkDependencyInfo>();
+		auto Key = [](const TArray<FChunkDependency>& Array)
+		{
+			TArray<FString> Parts;
+			for (const FChunkDependency& D : Array)
+			{
+				Parts.Add(FString::Printf(TEXT("%d>%d"), D.ChunkID, D.ParentChunkID));
+			}
+			Parts.Sort();
+			return FString::Join(Parts, TEXT(","));
+		};
+		const FString Before = Key(Info->DependencyArray);
 		Info->DependencyArray.RemoveAll([&Chunks](const FChunkDependency& D) { return Chunks.Contains(D.ChunkID); });
 		for (int32 i = 0; i < Chunks.Num(); ++i)
 		{
@@ -558,8 +553,11 @@ namespace AEWPackaging
 			Dep.ParentChunkID = Chunks[(i + 1) % Chunks.Num()];
 			Info->DependencyArray.Add(Dep);
 		}
-		Info->SaveConfig();
-		Info->UpdateDefaultConfigFile();
+		if (Key(Info->DependencyArray) != Before)
+		{
+			Info->SaveConfig();
+			Info->UpdateDefaultConfigFile();
+		}
 		TArray<FString> Ids;
 		for (int32 Id : Chunks)
 		{
@@ -568,7 +566,7 @@ namespace AEWPackaging
 		return FString::Join(Ids, TEXT(", "));
 	}
 
-	int32 CookOnlyLabelledContent(TArray<FString>& Log)
+	int32 CookOnlyLabelledContent(TArray<FString>& Log, int32* OutMissing)
 	{
 		IAssetRegistry& AR = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
 		UProjectPackagingSettings* PS = GetMutableDefault<UProjectPackagingSettings>();
@@ -679,12 +677,25 @@ namespace AEWPackaging
 			Path.Path = D;
 			NewList.Add(Path);
 		}
-		PS->DirectoriesToNeverCook = NewList;
+		auto ListKey = [](const TArray<FDirectoryPath>& List)
+		{
+			TArray<FString> Parts;
+			for (const FDirectoryPath& D : List)
+			{
+				Parts.Add(NormDir(D.Path));
+			}
+			return FString::Join(Parts, TEXT("|"));
+		};
 		const bool bWasCookAll = PS->bCookAll;
+		const bool bSettingsChanged = bWasCookAll || PS->bCookMapsOnly || ListKey(PS->DirectoriesToNeverCook) != ListKey(NewList);
+		PS->DirectoriesToNeverCook = NewList;
 		PS->bCookAll = false;
 		PS->bCookMapsOnly = false;
-		PS->SaveConfig();
-		PS->UpdateDefaultConfigFile();
+		if (bSettingsChanged)
+		{
+			PS->SaveConfig();
+			PS->UpdateDefaultConfigFile();
+		}
 
 		const FString ChunkLine = DetachChunksFromChunkZero(ModChunks);
 
@@ -740,6 +751,10 @@ namespace AEWPackaging
 		if (Missing.Num() > 0)
 		{
 			AddSection(Log, TEXT("Used but not labelled, so not cooked (move them into a labelled folder or add them to a label):"), Missing);
+		}
+		if (OutMissing)
+		{
+			*OutMissing = Missing.Num();
 		}
 		return Never.Num();
 	}

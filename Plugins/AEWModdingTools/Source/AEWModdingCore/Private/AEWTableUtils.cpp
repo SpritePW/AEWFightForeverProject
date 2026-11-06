@@ -327,25 +327,38 @@ namespace AEWMenus
 		}
 	}
 
-	void AddGroupedToolEntry(FName Group, const FText& GroupLabel, FName EntryName, const FText& Label, const FText& ToolTip, const FUIAction& Action)
+	static UToolMenu* SubMenuOf(UToolMenu* Parent, const FString& ParentName, FName Group, const FText& GroupLabel)
 	{
 		UToolMenus* Menus = UToolMenus::Get();
-		UToolMenu* Root = RootMenu();
-		if (!Root)
+		if (!Parent)
 		{
-			return;
+			return nullptr;
 		}
-		FToolMenuSection& Groups = Root->FindOrAddSection("Groups");
+		FToolMenuSection& Groups = Parent->FindOrAddSection("Groups");
 		if (!Groups.FindEntry(Group))
 		{
 			Groups.AddSubMenu(Group, GroupLabel, FText::GetEmpty(), FNewToolMenuChoice());
 		}
-		const FName GroupMenu(*FString::Printf(TEXT("%s.%s"), RootMenuName, *Group.ToString()));
+		const FName GroupMenu(*FString::Printf(TEXT("%s.%s"), *ParentName, *Group.ToString()));
 		if (!Menus->IsMenuRegistered(GroupMenu))
 		{
 			Menus->RegisterMenu(GroupMenu);
 		}
-		if (UToolMenu* Sub = Menus->ExtendMenu(GroupMenu))
+		return Menus->ExtendMenu(GroupMenu);
+	}
+
+	void AddGroupedToolEntry(FName Group, const FText& GroupLabel, FName EntryName, const FText& Label, const FText& ToolTip, const FUIAction& Action)
+	{
+		if (UToolMenu* Sub = SubMenuOf(RootMenu(), RootMenuName, Group, GroupLabel))
+		{
+			Sub->FindOrAddSection("Tools").AddMenuEntry(EntryName, Label, ToolTip, FSlateIcon(), Action);
+		}
+	}
+
+	void AddSubGroupedToolEntry(FName Group, const FText& GroupLabel, FName SubGroup, const FText& SubGroupLabel, FName EntryName, const FText& Label, const FText& ToolTip, const FUIAction& Action)
+	{
+		const FString GroupName = FString::Printf(TEXT("%s.%s"), RootMenuName, *Group.ToString());
+		if (UToolMenu* Sub = SubMenuOf(SubMenuOf(RootMenu(), RootMenuName, Group, GroupLabel), GroupName, SubGroup, SubGroupLabel))
 		{
 			Sub->FindOrAddSection("Tools").AddMenuEntry(EntryName, Label, ToolTip, FSlateIcon(), Action);
 		}

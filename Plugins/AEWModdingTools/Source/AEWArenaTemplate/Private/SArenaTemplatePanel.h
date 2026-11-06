@@ -23,9 +23,13 @@ public:
 
 	void Construct(const FArguments& InArgs);
 	virtual ~SArenaTemplatePanel();
+	virtual void Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime) override;
 
 private:
-	void Refresh();
+	void Refresh(bool bQuiet = false);
+	void QueueRefresh();
+	void OnAssetChanged(const struct FAssetData& Asset);
+	void OnAssetRenamed(const struct FAssetData& Asset, const FString& OldPath);
 	void ApplyFilter();
 	void Create();
 	void AddLog(const FString& Line);
@@ -52,8 +56,13 @@ private:
 	int32 ArenaId = 0;
 	int32 ChunkId = 100;
 	bool bCreateLabel = true;
-	bool bAddMaps = true;
 	bool bRegister = true;
+
+	bool bRefreshPending = false;
+	double RefreshAt = 0.0;
+	FDelegateHandle AddedHandle;
+	FDelegateHandle RemovedHandle;
+	FDelegateHandle RenamedHandle;
 
 	mutable int32 CheckedId = -1;
 	mutable bool bCheckedFree = true;
