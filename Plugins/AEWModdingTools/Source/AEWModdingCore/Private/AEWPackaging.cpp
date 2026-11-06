@@ -189,7 +189,12 @@ namespace AEWPackaging
 
 	static bool IsNewTable(const UObject* Object)
 	{
-		return Object && Object->IsA<UDataTable>() && !Object->IsA<UCompositeDataTable>() && Object->GetName().EndsWith(TEXT("_New"));
+		if (!Object || !Object->IsA<UDataTable>() || Object->IsA<UCompositeDataTable>())
+		{
+			return false;
+		}
+		const FString Path = Object->GetOutermost()->GetName();
+		return Object->GetName().EndsWith(TEXT("_New")) || Path.Contains(TEXT("/New/"));
 	}
 
 	static void CollectWithParents(UObject* Object, TArray<UObject*>& All)
