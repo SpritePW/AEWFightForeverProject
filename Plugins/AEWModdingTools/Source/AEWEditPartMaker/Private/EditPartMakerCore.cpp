@@ -466,10 +466,11 @@ bool EditPartMaker::MakePart(const FEditPartMakerTables& Tables, const FPartRequ
 	Log.Add(FString::Printf(TEXT("%s: row %s (default unlocked)"), *Tables.Unlock->GetName(), *UnlockRowName(R.UnlockID).ToString()));
 
 	TArray<UPackage*> Packages = { WA->GetOutermost(), Tables.Parts->GetOutermost(), Tables.Unlock->GetOutermost() };
-	const UAEWModdingSettings* Packaging = AEWPackaging::Settings();
+	int32 PartChunk = 0;
 	{
 		const FString LabelPackage = MeshFolder(Mesh) / (TEXT("PAL_") + R.WAName);
-		AEWPackaging::UpdateLabel(LabelPackage, Packaging->ChunkId, { WA, Mesh }, true, true, Packages, &Log);
+		PartChunk = AEWPackaging::ChunkForLabel(LabelPackage);
+		AEWPackaging::UpdateLabel(LabelPackage, PartChunk, { WA, Mesh }, true, true, Packages, &Log);
 		AEWPackaging::LabelSharedTables({ Tables.Parts, Tables.PartsList, Tables.Unlock, Tables.BaseUnlock }, Packages, &Log);
 	}
 
@@ -479,7 +480,7 @@ bool EditPartMaker::MakePart(const FEditPartMakerTables& Tables, const FPartRequ
 		Log.Add(FString::Printf(TEXT("saved %d package(s): WA, tables%s"), Packages.Num(), TEXT(", labels")));
 	}
 
-	Log.Add(FString::Printf(TEXT("Package Project puts the part folder %s and the tables in chunk %d."), *MeshFolder(Mesh), Packaging->ChunkId));
+	Log.Add(FString::Printf(TEXT("Package Project puts the part folder %s in chunk %d and the tables in the table chunks."), *MeshFolder(Mesh), PartChunk));
 	return true;
 }
 

@@ -1266,7 +1266,9 @@ FString UAEWArenaTools::CreateArenaFromTemplate(const FString& TemplateMap, cons
 			}
 		}
 		TArray<FString> PackagingLog;
-		AEWPackaging::UpdateLabel(DestDir + TEXT("/PAL_") + NewName, ChunkId, MapObjects, true, false, ToSave, &PackagingLog);
+		const int32 LabelChunk = ChunkId > 0 ? ChunkId : AEWPackaging::ChunkForLabel(DestDir + TEXT("/PAL_") + NewName);
+		AEWPackaging::UpdateLabel(DestDir + TEXT("/PAL_") + NewName, LabelChunk, MapObjects, true, false, ToSave, &PackagingLog);
+		UE_LOG(LogAEWArena, Log, TEXT("label PAL_%s: chunk %d"), *NewName, LabelChunk);
 		for (const FString& Line : PackagingLog)
 		{
 			UE_LOG(LogAEWArena, Log, TEXT("%s"), *Line);
@@ -3090,7 +3092,7 @@ int32 UAEWArenaTools::MakeSharedSublevelsOwn()
 	IAssetRegistry& AR = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
 	TArray<FAssetData> Labels;
 	AR.GetAssetsByPath(FName(*Folder), Labels, false);
-	int32 Chunk = AEWPackaging::Settings()->ChunkId;
+	int32 Chunk = AEWPackaging::NextFreeChunkId();
 	FString LabelPkg = Folder + TEXT("/PAL_") + MapName;
 	for (const FAssetData& A : Labels)
 	{

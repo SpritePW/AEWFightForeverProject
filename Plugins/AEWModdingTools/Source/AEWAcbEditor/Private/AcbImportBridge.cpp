@@ -389,10 +389,10 @@ bool AcbImportBridge::Import(const FRequest& Request, TArray<FString>& OutLog, F
 	}
 
 	int32 LabelChunk = 0;
-	const UAEWModdingSettings* Packaging = AEWPackaging::Settings();
-	if (AEWPackaging::UpdateLabel(Request.PackagePath / (TEXT("PAL_") + SheetName), Packaging->ChunkId, LabelAssets, false, false, ToSave, &OutLog))
+	const int32 SheetChunk = AEWPackaging::ChunkForLabel(Request.PackagePath / (TEXT("PAL_") + SheetName));
+	if (AEWPackaging::UpdateLabel(Request.PackagePath / (TEXT("PAL_") + SheetName), SheetChunk, LabelAssets, false, false, ToSave, &OutLog))
 	{
-		LabelChunk = Packaging->ChunkId;
+		LabelChunk = SheetChunk;
 	}
 
 	if (Request.bHasStreamingAwb)

@@ -23,12 +23,12 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
 	static FString CreateArenaFromTemplate(const FString& TemplateMap, const FString& DestFolder, const FString& InName,
-		bool bCreateLabel = true, int32 ChunkId = 100, bool bAddToMapsToCook = true, bool bOpenAfter = true,
+		bool bCreateLabel = true, int32 ChunkId = 0, bool bAddToMapsToCook = true, bool bOpenAfter = true,
 		bool bRegisterArena = true, const FString& DisplayName = TEXT(""), int32 ArenaId = -1);
 
 	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
 	static int32 RegisterArena(const FString& LevelName, const FString& CopyFromLevelName, const FString& DisplayName,
-		const FString& LabelFolder, int32 ChunkId = 100, int32 ArenaId = -1);
+		const FString& LabelFolder, int32 ChunkId = 0, int32 ArenaId = -1);
 
 	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
 	static FString MakeArenaMapName(int32 ArenaId, const FString& Name);

@@ -225,6 +225,10 @@ private:
 	void RegisterMenus()
 	{
 		FToolMenuOwnerScoped OwnerScoped(this);
+		AEWMenus::AddGroupedToolEntry("Cook", LOCTEXT("CookGroup", "Cook"), "AEWCookChooseLabels",
+			LOCTEXT("ChooseLabels", "Choose What To Cook..."),
+			LOCTEXT("ChooseLabelsTip", "Tick the labels (arenas, edit parts, cue sheets, tables) to cook and package; unticked ones are left out of the cook completely."),
+			FUIAction(FExecuteAction::CreateLambda([]() { AEWPackaging::ChooseLabelsToCook(); })));
 		AEWMenus::AddGroupedToolEntry("Cook", LOCTEXT("CookGroup", "Cook"), "AEWCookClearUnlabelledChunks",
 			LOCTEXT("ClearChunks", "Clear Unlabelled Chunk Assignments"),
 			LOCTEXT("ClearChunksTip", "List and clear every chunk assignment that doesn't come from a PrimaryAssetLabel: chunk IDs stored in packages (old 'Assign to Chunk') and chunk IDs on Asset Manager rules. Asks before changing anything."),

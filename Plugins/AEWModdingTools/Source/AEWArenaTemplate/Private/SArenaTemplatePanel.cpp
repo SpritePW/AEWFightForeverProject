@@ -81,7 +81,7 @@ void SArenaTemplatePanel::Construct(const FArguments& InArgs)
 {
 	const UAEWArenaTemplateSettings* S = GetDefault<UAEWArenaTemplateSettings>();
 	ParentFolder = S->DefaultParentFolder.Path;
-	ChunkId = AEWPackaging::Settings()->ChunkId;
+	ChunkId = AEWPackaging::NextFreeChunkId();
 
 	LogCapture = MakeShared<FArenaLogCapture>([this](const FString& Line) { LogText += Line + TEXT("\n"); });
 	GLog->AddOutputDevice(LogCapture.Get());
@@ -380,6 +380,10 @@ void SArenaTemplatePanel::Create()
 	const FString Result = UAEWArenaTools::CreateArenaFromTemplate(Selected->Package, ParentFolder.TrimStartAndEnd(), Name,
 		bCreateLabel, ChunkId, false, true, bRegister, DisplayName.TrimStartAndEnd(), bRegister ? ArenaId : -1);
 	AddLog(Result.IsEmpty() ? TEXT("Failed - see errors above.") : TEXT("Done: ") + Result);
+	if (!Result.IsEmpty())
+	{
+		ChunkId = AEWPackaging::NextFreeChunkId();
+	}
 	Refresh();
 }
 

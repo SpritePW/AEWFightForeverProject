@@ -80,6 +80,47 @@ namespace AEWPackaging
 		return GetDefault<UAEWModdingSettings>();
 	}
 
+	int32 NextFreeChunkId()
+	{
+		const UAEWModdingSettings* S = Settings();
+		TSet<int32> Used;
+		Used.Add(S->NewTablesChunkId);
+		Used.Add(S->BaseTablesChunkId);
+		IAssetRegistry& AR = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
+		TArray<FAssetData> Labels;
+		AR.GetAssetsByClass(UPrimaryAssetLabel::StaticClass()->GetFName(), Labels, true);
+		for (const FAssetData& A : Labels)
+		{
+			if (UPrimaryAssetLabel* L = Cast<UPrimaryAssetLabel>(A.GetAsset()))
+			{
+				if (L->Rules.ChunkId > 0)
+				{
+					Used.Add(L->Rules.ChunkId);
+				}
+			}
+		}
+		int32 Id = FMath::Max(1, S->ChunkId);
+		while (Used.Contains(Id))
+		{
+			++Id;
+		}
+		return Id;
+	}
+
+	int32 ChunkForLabel(const FString& LabelPackage)
+	{
+		const FString PackageName = NormDir(LabelPackage);
+		const FString Name = FPackageName::GetShortName(PackageName);
+		if (UPrimaryAssetLabel* L = LoadObject<UPrimaryAssetLabel>(nullptr, *(PackageName + TEXT(".") + Name), nullptr, LOAD_NoWarn | LOAD_Quiet))
+		{
+			if (L->Rules.ChunkId > 0)
+			{
+				return L->Rules.ChunkId;
+			}
+		}
+		return NextFreeChunkId();
+	}
+
 	UPrimaryAssetLabel* UpdateLabel(const FString& LabelPackage, int32 ChunkId, const TArray<UObject*>& Assets,
 		bool bLabelDirectory, bool bRecursive, TArray<UPackage*>& ToSave, TArray<FString>* Log)
 	{
@@ -107,7 +148,10 @@ namespace AEWPackaging
 
 		Label->Modify();
 		Label->Rules.ChunkId = ChunkId;
-		Label->Rules.CookRule = EPrimaryAssetCookRule::AlwaysCook;
+		if (bNew || Label->Rules.CookRule == EPrimaryAssetCookRule::Unknown)
+		{
+			Label->Rules.CookRule = EPrimaryAssetCookRule::AlwaysCook;
+		}
 		Label->Rules.bApplyRecursively = bRecursive;
 		Label->Rules.Priority = 10;
 		Label->bLabelAssetsInMyDirectory = bLabelDirectory;
@@ -587,10 +631,29 @@ namespace AEWPackaging
 		AR.GetAssetsByClass(UPrimaryAssetLabel::StaticClass()->GetFName(), Labels, true);
 		int32 LabelCount = 0;
 		TSet<int32> ModChunks;
+		TArray<UPackage*> Relaxed;
+		TArray<FString> RelaxedNames;
 		for (const FAssetData& A : Labels)
 		{
 			UPrimaryAssetLabel* Label = Cast<UPrimaryAssetLabel>(A.GetAsset());
-			if (!Label || Label->Rules.CookRule == EPrimaryAssetCookRule::NeverCook)
+			if (Label && Label->Rules.CookRule == EPrimaryAssetCookRule::NeverCook)
+			{
+				Label->Modify();
+				Label->Rules.CookRule = EPrimaryAssetCookRule::DevelopmentCook;
+				Label->MarkPackageDirty();
+				Relaxed.Add(Label->GetOutermost());
+				RelaxedNames.Add(A.AssetName.ToString());
+			}
+		}
+		if (Relaxed.Num() > 0)
+		{
+			UEditorLoadingAndSavingUtils::SavePackages(Relaxed, false);
+			AddSection(Log, TEXT("Unticked labels changed from Never Cook to 'cook only if referenced' (their folders stay excluded):"), RelaxedNames);
+		}
+		for (const FAssetData& A : Labels)
+		{
+			UPrimaryAssetLabel* Label = Cast<UPrimaryAssetLabel>(A.GetAsset());
+			if (!Label || Label->Rules.CookRule == EPrimaryAssetCookRule::NeverCook || Label->Rules.CookRule == EPrimaryAssetCookRule::DevelopmentCook)
 			{
 				continue;
 			}
@@ -687,7 +750,38 @@ namespace AEWPackaging
 			return FString::Join(Parts, TEXT("|"));
 		};
 		const bool bWasCookAll = PS->bCookAll;
-		const bool bSettingsChanged = bWasCookAll || PS->bCookMapsOnly || ListKey(PS->DirectoriesToNeverCook) != ListKey(NewList);
+		TArray<FString> LabelDirs;
+		for (const FAssetData& A : Labels)
+		{
+			UPrimaryAssetLabel* Label = Cast<UPrimaryAssetLabel>(A.GetAsset());
+			if (Label && Label->bLabelAssetsInMyDirectory && A.PackageName.ToString().StartsWith(TEXT("/Game/")))
+			{
+				LabelDirs.Add(FPackageName::GetLongPackagePath(A.PackageName.ToString()));
+			}
+		}
+		TArray<FString> DroppedMaps;
+		const int32 MapsBefore = PS->MapsToCook.Num();
+		PS->MapsToCook.RemoveAll([&LabelDirs, &DroppedMaps](const FFilePath& Map)
+		{
+			FString Package = Map.FilePath;
+			Package.Split(TEXT("."), &Package, nullptr);
+			bool bLabelled = false;
+			for (const FString& Dir : LabelDirs)
+			{
+				bLabelled = bLabelled || Package.StartsWith(Dir + TEXT("/"));
+			}
+			if (bLabelled || (Package.StartsWith(TEXT("/Game/")) && !FPackageName::DoesPackageExist(Package)))
+			{
+				DroppedMaps.Add(Package);
+				return true;
+			}
+			return false;
+		});
+		if (DroppedMaps.Num() > 0)
+		{
+			AddSection(Log, TEXT("Taken out of 'List of maps to include' (a label decides whether they cook, or the map no longer exists):"), DroppedMaps);
+		}
+		const bool bSettingsChanged = bWasCookAll || PS->bCookMapsOnly || ListKey(PS->DirectoriesToNeverCook) != ListKey(NewList) || PS->MapsToCook.Num() != MapsBefore;
 		PS->DirectoriesToNeverCook = NewList;
 		PS->bCookAll = false;
 		PS->bCookMapsOnly = false;

@@ -14,20 +14,20 @@ public:
 
 	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
 
-	UPROPERTY(EditAnywhere, config, Category = "Packaging", meta = (DisplayName = "Chunk ID", ClampMin = "1", ToolTip = "Chunk the labels put assets in (pakchunk<ID>-WindowsNoEditor)."))
-	int32 ChunkId = 100;
-
-	UPROPERTY(EditAnywhere, config, Category = "Tables", meta = (DisplayName = "New Tables Label", ToolTip = "Label for every DataTable whose name ends in _New (the rows you add)."))
-	FString NewTablesLabel;
-
-	UPROPERTY(EditAnywhere, config, Category = "Tables", meta = (DisplayName = "New Tables Chunk ID", ClampMin = "1"))
-	int32 NewTablesChunkId = 101;
+	UPROPERTY(EditAnywhere, config, Category = "Packaging", meta = (DisplayName = "First Chunk ID", ClampMin = "1", ToolTip = "Every arena, edit part and cue sheet the tools label gets its own chunk (pakchunk<ID>-WindowsNoEditor), so each mod packages separately. New ones take the first free ID from here up, skipping the table chunks and any ID a label already uses."))
+	int32 ChunkId = 13;
 
 	UPROPERTY(EditAnywhere, config, Category = "Tables", meta = (DisplayName = "Base Tables Label", ToolTip = "Label for every other DataTable (composites, _Original tables, ...) and the arena enum."))
 	FString BaseTablesLabel;
 
 	UPROPERTY(EditAnywhere, config, Category = "Tables", meta = (DisplayName = "Base Tables Chunk ID", ClampMin = "1"))
-	int32 BaseTablesChunkId = 102;
+	int32 BaseTablesChunkId = 11;
+
+	UPROPERTY(EditAnywhere, config, Category = "Tables", meta = (DisplayName = "New Tables Label", ToolTip = "Label for every DataTable whose name ends in _New (the rows you add)."))
+	FString NewTablesLabel;
+
+	UPROPERTY(EditAnywhere, config, Category = "Tables", meta = (DisplayName = "New Tables Chunk ID", ClampMin = "1"))
+	int32 NewTablesChunkId = 12;
 
 	UPROPERTY(EditAnywhere, config, Category = "Tables", meta = (ContentDir, DisplayName = "Table Folders", ToolTip = "Folders whose DataTables are kept in the table labels automatically: when a table here is saved, removed or renamed, the labels are rebuilt. Sub-folders are included."))
 	TArray<FDirectoryPath> TableFolders;
