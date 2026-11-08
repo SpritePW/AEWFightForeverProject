@@ -166,7 +166,7 @@ namespace AEWPackaging
 		TMap<int32, const FAEWChunkOutput*> Names;
 		for (const FAEWChunkOutput& Out : S->ChunkOutputs)
 		{
-			if (Out.ChunkId > 0 && !Out.Name.IsEmpty())
+			if (Out.ChunkId > 0 && (!Out.Name.IsEmpty() || !Out.Zip.IsEmpty()))
 			{
 				Names.Add(Out.ChunkId, &Out);
 			}
@@ -183,20 +183,20 @@ namespace AEWPackaging
 				continue;
 			}
 			const FAEWChunkOutput* const* Found = Names.Find(Chunk);
-			if (!Found)
+			const FString Name = Found ? (*Found)->Name : FString();
+			const FString ZipName = Found && !(*Found)->Zip.IsEmpty() ? (*Found)->Zip : (Name.IsEmpty() ? FString::Printf(TEXT("pakchunk%d"), Chunk) : Name);
+			if (Name.IsEmpty())
 			{
 				Unnamed.Add(Chunk);
-				continue;
 			}
-			const FAEWChunkOutput& Out = **Found;
-			const FString Base = Out.Name.EndsWith(TEXT("_P")) ? Out.Name : Out.Name + TEXT("_P");
+			const FString Base = Name.IsEmpty() ? FPaths::GetBaseFilename(File) : (Name.EndsWith(TEXT("_P")) ? Name : Name + TEXT("_P"));
 			const FString Target = OutDir / Base + TEXT(".") + FPaths::GetExtension(File);
 			if (FM.Copy(*Target, *(PaksFolder / File), true, true) != COPY_OK)
 			{
 				Log.Add(FString::Printf(TEXT("warning: could not copy %s to %s"), *File, *Target));
 				continue;
 			}
-			Zips.FindOrAdd(Out.Zip.IsEmpty() ? Out.Name : Out.Zip).Add(Target);
+			Zips.FindOrAdd(ZipName).Add(Target);
 			if (!Done.Contains(Chunk))
 			{
 				Done.Add(Chunk);
@@ -250,9 +250,9 @@ namespace AEWPackaging
 			{
 				Ids.Add(FString::Printf(TEXT("pakchunk%d"), Id));
 			}
-			Log.Add(TEXT("Left as they are (no name in Cook > Name Chunks): ") + FString::Join(Ids, TEXT(", ")));
+			Log.Add(TEXT("Kept their pakchunk names (no file name set): ") + FString::Join(Ids, TEXT(", ")));
 		}
-		Log.Insert(FString::Printf(TEXT("Packaged mods: %d chunk(s) renamed into %d zip(s) in %s"), Done.Num(), ZipNames.Num(), *OutDir), 0);
+		Log.Insert(FString::Printf(TEXT("Packaged mods: %d chunk(s) into %d zip(s) in %s"), Done.Num(), ZipNames.Num(), *OutDir), 0);
 		FFileHelper::SaveStringArrayToFile(Log, *(OutDir / TEXT("PackagedMods.txt")));
 		return Done.Num();
 	}

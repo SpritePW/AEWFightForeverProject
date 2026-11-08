@@ -131,9 +131,62 @@ namespace
 		FVector Across = FVector::ZeroVector;
 		FVector Depth = FVector::ZeroVector;
 		FVector Facing = FVector::ForwardVector;
+		float Curve = 0.f;
+
+		bool IsCurved() const
+		{
+			return FMath::Abs(Curve) > 0.5f;
+		}
+
+		FVector Point(float A, float D, float& OutTurn) const
+		{
+			const FVector Center = Origin + Across * 0.5f + Depth * 0.5f;
+			const float Width = FMath::Max(Across.Size(), 1.f);
+			const FVector AcrossDir = Across / Width;
+			const FVector DepthDir = Depth.GetSafeNormal();
+			if (!IsCurved())
+			{
+				OutTurn = 0.f;
+				return Center + AcrossDir * A + DepthDir * D;
+			}
+			const float Radius = Width / FMath::DegreesToRadians(Curve);
+			const FVector Pivot = Center + Facing * Radius;
+			const float Angle = A / Radius;
+			OutTurn = FMath::RadiansToDegrees(Angle);
+			const FVector Dir = Facing.RotateAngleAxis(OutTurn, FVector::UpVector);
+			return Pivot - Dir * (Radius - D);
+		}
+
+		void Outline(float Z, TArray<FVector>& Out) const
+		{
+			Out.Reset();
+			const float HalfA = Across.Size() * 0.5f;
+			const float HalfD = Depth.Size() * 0.5f;
+			const int32 Steps = IsCurved() ? 24 : 1;
+			float Turn = 0.f;
+			for (int32 i = 0; i <= Steps; ++i)
+			{
+				Out.Add(Point(-HalfA + 2.f * HalfA * i / Steps, HalfD, Turn));
+			}
+			for (int32 i = 0; i <= Steps; ++i)
+			{
+				Out.Add(Point(HalfA - 2.f * HalfA * i / Steps, -HalfD, Turn));
+			}
+			for (FVector& P : Out)
+			{
+				P.Z = Z;
+			}
+		}
 
 		bool Contains(const FVector& P) const
 		{
+			if (IsCurved())
+			{
+				TArray<FVector> Points;
+				Outline(P.Z, Points);
+				FBox B(Points);
+				return B.ExpandBy(10.f).IsInside(FVector(P.X, P.Y, P.Z));
+			}
 			const FVector D = FVector(P.X, P.Y, 0.f) - FVector(Origin.X, Origin.Y, 0.f);
 			const float A2 = Across.SizeSquared2D();
 			const float D2 = Depth.SizeSquared2D();
@@ -148,6 +201,12 @@ namespace
 
 		FBox Box(float Z) const
 		{
+			if (IsCurved())
+			{
+				TArray<FVector> Points;
+				Outline(Z, Points);
+				return FBox(Points);
+			}
 			FBox B(ForceInit);
 			B += FVector(Origin.X, Origin.Y, Z);
 			B += FVector(Origin.X, Origin.Y, Z) + Across;
@@ -533,8 +592,8 @@ namespace
 		float Seat = 70.f;
 		float Row = 90.f;
 		float Straight = 0.8f;
-		float Turn = 8.f;
 		float Billboard = 0.f;
+		float Curve = 0.f;
 		EAEWCrowdType Type = EAEWCrowdType::ByDistance;
 	};
 
@@ -605,6 +664,7 @@ namespace
 		F.Across = Right * Width;
 		F.Depth = F.Facing * DepthLength;
 		F.Origin = M.Location - F.Across * 0.5f - F.Depth * 0.5f;
+		F.Curve = O.Curve;
 		return F;
 	}
 
@@ -651,6 +711,7 @@ namespace
 		F.Depth = Forward * FMath::Max(MaxF - MinF, 1.f);
 		F.Across = Right * FMath::Max(MaxR - MinR, 1.f);
 		F.Facing = Forward;
+		F.Curve = Ctx.Options.Curve;
 		return F;
 	}
 
@@ -720,7 +781,6 @@ namespace
 		const int32 Rows = FMath::Clamp(O.Rows, 1, 2000);
 		const float Fill = FMath::Clamp(O.Fill, 0.f, 1.f);
 		const float Scatter = 1.f - FMath::Clamp(O.Straight, 0.f, 1.f);
-		const float Turn = FMath::Clamp(O.Turn, 0.f, 90.f);
 		const float BillboardDistance = Ctx.Billboards.Num() > 0 ? O.Billboard : 0.f;
 		const bool bAllBillboards = O.Type == EAEWCrowdType::Billboards && Ctx.Billboards.Num() > 0;
 		const bool bAllPeople = O.Type == EAEWCrowdType::People || (O.Type == EAEWCrowdType::Billboards && Ctx.Billboards.Num() == 0);
@@ -741,8 +801,6 @@ namespace
 			const float AreaYaw = Frame.Facing.Rotation().Yaw;
 			const float AcrossLength = FMath::Max(Frame.Across.Size(), 1.f);
 			const float DepthLength = FMath::Max(Frame.Depth.Size(), 1.f);
-			const FVector AcrossDir = Frame.Across / AcrossLength;
-			const FVector DepthDir = Frame.Depth / DepthLength;
 			const float AcrossStep = (!Marker && O.Seat <= 0.f) ? AcrossLength / PerRow : (O.Seat > 0.f ? O.Seat : 70.f);
 			const float DepthStep = (!Marker && O.Row <= 0.f) ? DepthLength / Rows : (O.Row > 0.f ? O.Row : 90.f);
 			const float AcrossStart = AcrossLength * 0.5f - AcrossStep * (PerRow - 1) * 0.5f;
@@ -780,9 +838,9 @@ namespace
 				FRandomStream Random(HashCombine(Seed, GetTypeHash(Cell)));
 				const float AcrossPos = AcrossStart + (Column + Random.FRandRange(-0.5f, 0.5f) * Scatter) * AcrossStep;
 				const float DepthPos = DepthStart + (RowIndex + Random.FRandRange(-0.5f, 0.5f) * Scatter) * DepthStep;
-				const float JitterYaw = Random.FRandRange(-1.f, 1.f) * Turn;
 				const int32 Pick = Random.RandHelper(1 << 20);
-				const FVector XY = Frame.Origin + AcrossDir * AcrossPos + DepthDir * DepthPos;
+				float CurveTurn = 0.f;
+				const FVector XY = Frame.Point(AcrossPos - AcrossLength * 0.5f, DepthPos - DepthLength * 0.5f, CurveTurn);
 
 				const float Limit = Marker ? Marker->Location.Z + 100.f : TNumericLimits<float>::Max();
 				bool bFound = false;
@@ -823,7 +881,7 @@ namespace
 				Spot.Location = FVector(XY.X, XY.Y, BestZ);
 				Spot.bBillboard = bAllBillboards || (!bAllPeople && BillboardDistance > 0.f && FVector::Dist2D(Spot.Location, Ctx.Ring) > BillboardDistance);
 				Spot.Template = Pick % (Spot.bBillboard ? Ctx.Billboards.Num() : Ctx.People.Num());
-				Spot.Yaw = AreaYaw + JitterYaw;
+				Spot.Yaw = AreaYaw + CurveTurn;
 				Ctx.Spots.Add(Spot);
 				(Spot.bBillboard ? Ctx.BillboardCount : Ctx.PeopleCount)++;
 				++Placed;
@@ -937,11 +995,11 @@ namespace
 		for (const FAreaMarker& M : Ctx.Markers)
 		{
 			const FBlockFrame F = MarkerFrame(M, Ctx.Options);
-			const FVector Base(F.Origin.X, F.Origin.Y, M.Location.Z);
-			const FVector Corners[4] = { Base, Base + F.Across, Base + F.Across + F.Depth, Base + F.Depth };
-			for (int32 i = 0; i < 4; ++i)
+			TArray<FVector> Corners;
+			F.Outline(M.Location.Z, Corners);
+			for (int32 i = 0; i < Corners.Num(); ++i)
 			{
-				Batch.Add(FBatchedLine(Corners[i], Corners[(i + 1) % 4], FLinearColor(0.f, 0.8f, 1.f), 0.f, 4.f, SDPG_Foreground));
+				Batch.Add(FBatchedLine(Corners[i], Corners[(i + 1) % Corners.Num()], FLinearColor(0.f, 0.8f, 1.f), 0.f, 4.f, SDPG_Foreground));
 			}
 			const FVector Front = M.Location + F.Facing * (F.Depth.Size() * 0.5f + 60.f);
 			Batch.Add(FBatchedLine(M.Location, Front, FLinearColor(0.f, 0.8f, 1.f), 0.f, 6.f, SDPG_Foreground));
@@ -1085,9 +1143,9 @@ namespace
 		S->AudienceSeatSpacing = FMath::Max(O.Seat, 0.f);
 		S->AudiencePerRow = FMath::Clamp(O.PerRow, 1, 2000);
 		S->AudienceRows = FMath::Clamp(O.Rows, 1, 2000);
+		S->AudienceRowCurve = FMath::Clamp(O.Curve, -270.f, 270.f);
 		S->AudienceRowSpacing = FMath::Max(O.Row, 0.f);
 		S->AudienceStraightness = FMath::Clamp(O.Straight, 0.f, 1.f);
-		S->AudienceTurnVariation = FMath::Clamp(O.Turn, 0.f, 90.f);
 		S->AudienceBillboardDistance = FMath::Max(O.Billboard, 0.f);
 		S->AudienceCrowdType = O.Type;
 		S->SaveConfig();
@@ -1277,12 +1335,12 @@ namespace
 		};
 		Grid->AddSlot(0, Line).Padding(0.f, 3.f, 12.f, 3.f).VAlign(VAlign_Center)
 		[
-			SNew(STextBlock).Text(LOCTEXT("OptType", "Crowd type")).ToolTipText(LOCTEXT("OptTypeTip", "By distance: people near the ring, billboards beyond the distance below. People only / Billboards only: the whole fill is one kind."))
+			SNew(STextBlock).Text(LOCTEXT("OptType", "Type")).ToolTipText(LOCTEXT("OptTypeTip", "By distance: people near the ring, billboards beyond the distance below. People only / Billboards only: the whole fill is one kind."))
 		];
 		Grid->AddSlot(1, Line).Padding(0.f, 3.f)
 		[
 			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot().AutoWidth().Padding(0.f, 0.f, 10.f, 0.f)[ Radio(EAEWCrowdType::ByDistance, LOCTEXT("TypeDistance", "By distance")) ]
+			+ SHorizontalBox::Slot().AutoWidth().Padding(0.f, 0.f, 10.f, 0.f)[ Radio(EAEWCrowdType::ByDistance, LOCTEXT("TypeDistance", "Distance")) ]
 			+ SHorizontalBox::Slot().AutoWidth().Padding(0.f, 0.f, 10.f, 0.f)[ Radio(EAEWCrowdType::People, LOCTEXT("TypePeople", "People")) ]
 			+ SHorizontalBox::Slot().AutoWidth()[ Radio(EAEWCrowdType::Billboards, LOCTEXT("TypeBillboards", "Billboards")) ]
 		];
@@ -1328,14 +1386,14 @@ namespace
 			];
 			++Line;
 		};
-		AddCount(LOCTEXT("OptPerRow", "People per row"), LOCTEXT("OptPerRowTip", "How many people in each row."), &FFillOptions::PerRow);
+		AddCount(LOCTEXT("OptPerRow", "Per row"), LOCTEXT("OptPerRowTip", "How many people in each row."), &FFillOptions::PerRow);
 		AddCount(LOCTEXT("OptRows", "Rows"), LOCTEXT("OptRowsTip", "How many rows, one behind the other."), &FFillOptions::Rows);
-		AddRow(LOCTEXT("OptSeat", "Seat spacing (cm)"), LOCTEXT("OptSeatTip", "Distance between people in a row. Without a marker, 0 spreads each row evenly across the mesh."), &FFillOptions::Seat, 1.f, 0.f, 1000.f, 5.f);
-		AddRow(LOCTEXT("OptRow", "Row spacing (cm)"), LOCTEXT("OptRowTip", "Distance between rows. Without a marker, 0 spreads the rows evenly over the mesh."), &FFillOptions::Row, 1.f, 0.f, 1000.f, 5.f);
-		AddRow(LOCTEXT("OptFill", "Fill (%)"), LOCTEXT("OptFillTip", "Share of the rows x people spots that get someone. Lowering it only removes people; the rest stay where they are."), &FFillOptions::Fill, 100.f, 0.f, 100.f, 1.f);
-		AddRow(LOCTEXT("OptStraight", "Row straightness (%)"), LOCTEXT("OptStraightTip", "100 = everyone exactly in line; lower scatters people forwards, backwards and sideways."), &FFillOptions::Straight, 100.f, 0.f, 100.f, 1.f);
-		AddRow(LOCTEXT("OptTurn", "Facing variation (deg)"), LOCTEXT("OptTurnTip", "How far each person may turn away from facing the ring."), &FFillOptions::Turn, 1.f, 0.f, 90.f, 1.f);
-		AddRow(LOCTEXT("OptBillboard", "Billboards beyond (cm)"), LOCTEXT("OptBillboardTip", "People further than this from the ring are flat billboard crowd. 0 = always full models."), &FFillOptions::Billboard, 1.f, 0.f, 100000.f, 100.f,
+		AddRow(LOCTEXT("OptSeat", "Seat gap"), LOCTEXT("OptSeatTip", "Distance between people in a row, in cm. Without a marker, 0 spreads each row evenly across the mesh."), &FFillOptions::Seat, 1.f, 0.f, 1000.f, 5.f);
+		AddRow(LOCTEXT("OptRow", "Row gap"), LOCTEXT("OptRowTip", "Distance between rows, in cm. Without a marker, 0 spreads the rows evenly over the mesh."), &FFillOptions::Row, 1.f, 0.f, 1000.f, 5.f);
+		AddRow(LOCTEXT("OptCurve", "Curve"), LOCTEXT("OptCurveTip", "Bend the rows into arcs, in degrees. The angle is how far the rows wrap around: 0 = straight, 90 = a quarter circle curving towards the way they face (around the ring), negative values curve the other way. Everyone faces the centre of the curve."), &FFillOptions::Curve, 1.f, -270.f, 270.f, 1.f);
+		AddRow(LOCTEXT("OptFill", "Fill %"), LOCTEXT("OptFillTip", "Share of the rows x people spots that get someone. Lowering it only removes people; the rest stay where they are."), &FFillOptions::Fill, 100.f, 0.f, 100.f, 1.f);
+		AddRow(LOCTEXT("OptStraight", "Straightness %"), LOCTEXT("OptStraightTip", "100 = everyone exactly in line; lower scatters people forwards, backwards and sideways."), &FFillOptions::Straight, 100.f, 0.f, 100.f, 1.f);
+		AddRow(LOCTEXT("OptBillboard", "Billboards from"), LOCTEXT("OptBillboardTip", "People further than this many cm from the ring are flat billboard crowd. 0 = always full models."), &FFillOptions::Billboard, 1.f, 0.f, 100000.f, 100.f,
 			TAttribute<bool>::Create(TAttribute<bool>::FGetter::CreateLambda([Ctx]() { return Ctx->Options.Type == EAEWCrowdType::ByDistance; })));
 
 		const FText Where = FText::FromString(Ctx->Markers.Num() > 0
@@ -1610,13 +1668,13 @@ int32 UAEWArenaTools::FillAudienceFromSelected()
 	Ctx->Options.Row = FMath::Max(S->AudienceRowSpacing, 0.f);
 	Ctx->Options.PerRow = FMath::Clamp(S->AudiencePerRow, 1, 2000);
 	Ctx->Options.Rows = FMath::Clamp(S->AudienceRows, 1, 2000);
+	Ctx->Options.Curve = FMath::Clamp(S->AudienceRowCurve, -270.f, 270.f);
 	if (Ctx->Markers.Num() > 0)
 	{
 		Ctx->Options.Seat = Ctx->Options.Seat > 0.f ? Ctx->Options.Seat : 70.f;
 		Ctx->Options.Row = Ctx->Options.Row > 0.f ? Ctx->Options.Row : 90.f;
 	}
 	Ctx->Options.Straight = FMath::Clamp(S->AudienceStraightness, 0.f, 1.f);
-	Ctx->Options.Turn = FMath::Clamp(S->AudienceTurnVariation, 0.f, 90.f);
 	Ctx->Options.Billboard = S->AudienceBillboardDistance;
 	Ctx->Options.Type = S->AudienceCrowdType;
 	Ctx->bDirty = true;

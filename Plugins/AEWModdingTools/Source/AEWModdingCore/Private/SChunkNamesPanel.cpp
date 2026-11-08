@@ -29,6 +29,29 @@ namespace ChunkNameColumns
 	static const FName Assets(TEXT("Assets"));
 }
 
+static FString EffectiveZip(const FChunkNameItem& I)
+{
+	if (!I.Zip.TrimStartAndEnd().IsEmpty())
+	{
+		return AEWPackaging::CleanModName(I.Zip);
+	}
+	if (!I.Name.TrimStartAndEnd().IsEmpty())
+	{
+		return AEWPackaging::CleanModName(I.Name);
+	}
+	return FString::Printf(TEXT("pakchunk%d"), I.Chunk);
+}
+
+static FString EffectiveFile(const FChunkNameItem& I)
+{
+	const FString Name = AEWPackaging::CleanModName(I.Name);
+	if (Name.IsEmpty())
+	{
+		return FString::Printf(TEXT("pakchunk%d-WindowsNoEditor"), I.Chunk);
+	}
+	return Name.EndsWith(TEXT("_P")) ? Name : Name + TEXT("_P");
+}
+
 class SChunkNameRow : public SMultiColumnTableRow<TSharedPtr<FChunkNameItem>>
 {
 public:
@@ -51,21 +74,13 @@ public:
 		if (Column == ChunkNameColumns::Name)
 		{
 			return SNew(STextBlock)
-				.Text_Lambda([I]() { return I->Name.IsEmpty() ? LOCTEXT("NotNamed", "(not renamed)") : FText::FromString(AEWPackaging::CleanModName(I->Name) + TEXT("_P")); })
+				.Text_Lambda([I]() { return FText::FromString(EffectiveFile(*I)); })
 				.ColorAndOpacity_Lambda([I]() { return I->Name.IsEmpty() ? FSlateColor::UseSubduedForeground() : FSlateColor::UseForeground(); });
 		}
 		if (Column == ChunkNameColumns::Zip)
 		{
 			return SNew(STextBlock)
-				.Text_Lambda([I]()
-				{
-					if (I->Name.IsEmpty())
-					{
-						return FText::GetEmpty();
-					}
-					const FString Zip = AEWPackaging::CleanModName(I->Zip.IsEmpty() ? I->Name : I->Zip);
-					return FText::FromString(Zip + TEXT(".zip"));
-				});
+				.Text_Lambda([I]() { return FText::FromString(EffectiveZip(*I) + TEXT(".zip")); });
 		}
 		return SNew(STextBlock)
 			.Text(FText::AsNumber(I->Assets.Num()))
@@ -125,10 +140,9 @@ void SChunkNamesPanel::Construct(const FArguments& InArgs)
 			)
 		];
 
-	auto Field = [this](FString FChunkNameItem::* Member, const FText& Hint)
+	auto Field = [this](FString FChunkNameItem::* Member)
 	{
 		return SNew(SEditableTextBox)
-			.HintText(Hint)
 			.IsEnabled_Lambda([this]() { return Selected.IsValid(); })
 			.Text_Lambda([this, Member]() { return Selected.IsValid() ? FText::FromString((*Selected).*Member) : FText::GetEmpty(); })
 			.OnTextChanged_Lambda([this, Member](const FText& T) { if (Selected.IsValid()) { (*Selected).*Member = T.ToString(); } })
@@ -152,12 +166,12 @@ void SChunkNamesPanel::Construct(const FArguments& InArgs)
 				]
 				+ SVerticalBox::Slot().AutoHeight()
 				[
-					AEWToolUI::MakeRow(LOCTEXT("FileName", "File name"), Field(&FChunkNameItem::Name, LOCTEXT("FileNameHint", "empty = not renamed or zipped")),
+					AEWToolUI::MakeRow(LOCTEXT("FileName", "File name"), Field(&FChunkNameItem::Name),
 						LOCTEXT("FileNameTip", "The chunk's .pak/.ucas/.utoc are copied as <name>_P.*. Names are per chunk, because several labels can share one chunk."))
 				]
 				+ SVerticalBox::Slot().AutoHeight()
 				[
-					AEWToolUI::MakeRow(LOCTEXT("ZipName", "Zip"), Field(&FChunkNameItem::Zip, LOCTEXT("ZipHint", "empty = the file name")),
+					AEWToolUI::MakeRow(LOCTEXT("ZipName", "Zip"), Field(&FChunkNameItem::Zip),
 						LOCTEXT("ZipTip", "Chunks with the same zip name are packed into one zip."))
 				]
 				+ SVerticalBox::Slot().AutoHeight()
@@ -187,7 +201,6 @@ void SChunkNamesPanel::Construct(const FArguments& InArgs)
 				[
 					AEWToolUI::MakeRow(LOCTEXT("Folder", "Output folder"),
 						SNew(SEditableTextBox)
-						.HintText(LOCTEXT("FolderHint", "empty = Mods inside the packaging folder"))
 						.Text_Lambda([this]() { return FText::FromString(OutputFolder); })
 						.OnTextChanged_Lambda([this](const FText& T) { OutputFolder = T.ToString(); })
 						.OnTextCommitted_Lambda([this](const FText&, ETextCommit::Type) { Save(); }))
@@ -406,7 +419,8 @@ void SChunkNamesPanel::Save()
 	{
 		Shown.Add(Item->Chunk);
 		const FString Name = AEWPackaging::CleanModName(Item->Name);
-		if (Name.IsEmpty())
+		const FString Zip = AEWPackaging::CleanModName(Item->Zip);
+		if (Name.IsEmpty() && Zip.IsEmpty())
 		{
 			continue;
 		}
@@ -466,23 +480,16 @@ FText SChunkNamesPanel::GetPreviewText() const
 	{
 		return FText::GetEmpty();
 	}
-	const FString Name = AEWPackaging::CleanModName(Selected->Name);
-	if (Name.IsEmpty())
-	{
-		return FText::FromString(FString::Printf(TEXT("pakchunk%d-WindowsNoEditor.* stays as it is and isn't zipped."), Selected->Chunk));
-	}
-	const FString Base = Name.EndsWith(TEXT("_P")) ? Name : Name + TEXT("_P");
-	const FString Zip = AEWPackaging::CleanModName(Selected->Zip.IsEmpty() ? Name : Selected->Zip);
+	const FString Zip = EffectiveZip(*Selected);
 	TArray<FString> Sharing;
 	for (const TSharedPtr<FChunkNameItem>& Item : AllItems)
 	{
-		if (Item != Selected && !Item->Name.TrimStartAndEnd().IsEmpty()
-			&& AEWPackaging::CleanModName(Item->Zip.IsEmpty() ? Item->Name : Item->Zip) == Zip)
+		if (Item != Selected && EffectiveZip(*Item) == Zip)
 		{
 			Sharing.Add(FString::Printf(TEXT("pakchunk%d"), Item->Chunk));
 		}
 	}
-	FString Text = FString::Printf(TEXT("pakchunk%d-WindowsNoEditor.* -> %s.pak/.ucas/.utoc in %s.zip"), Selected->Chunk, *Base, *Zip);
+	FString Text = FString::Printf(TEXT("pakchunk%d-WindowsNoEditor.* -> %s.pak/.ucas/.utoc in %s.zip"), Selected->Chunk, *EffectiveFile(*Selected), *Zip);
 	if (Sharing.Num() > 0)
 	{
 		Text += TEXT(" (shared with ") + FString::Join(Sharing, TEXT(", ")) + TEXT(")");
