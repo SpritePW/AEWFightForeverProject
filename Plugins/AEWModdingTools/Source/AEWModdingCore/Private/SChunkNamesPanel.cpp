@@ -167,7 +167,7 @@ void SChunkNamesPanel::Construct(const FArguments& InArgs)
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)
 		[
 			AEWToolUI::MakePrimaryButton(LOCTEXT("Package", "Package Project"),
-				LOCTEXT("PackageTip", "Package for Windows (64-bit) using the project's packaging settings."),
+				LOCTEXT("PackageTip", "Package for Windows (64-bit)."),
 				[this]() { Save(); AEWPackaging::PackageProject(); })
 		]
 
@@ -320,7 +320,7 @@ void SChunkNamesPanel::Construct(const FArguments& InArgs)
 								SNew(STextBlock).Text(LOCTEXT("ArchiveText", "Archive automatically"))
 							]
 						],
-						LOCTEXT("AutoTip", "Packaged chunks are moved out of the build into the output folder."))
+						LOCTEXT("AutoTip", "Packaged chunks are moved into the output folder."))
 				])
 		]
 

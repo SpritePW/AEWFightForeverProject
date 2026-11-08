@@ -73,7 +73,7 @@ void SEditPartMaker::Construct(const FArguments& InArgs)
 		SNew(SHorizontalBox)
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 4, 0)
 		[
-			AEWToolUI::MakeButton(LOCTEXT("UseSelected", "Use selected mesh"), LOCTEXT("UseSelectedTip", "Use the skeletal mesh selected in the Content Browser"),
+			AEWToolUI::MakeButton(LOCTEXT("UseSelected", "Use selected mesh"), LOCTEXT("UseSelectedTip", "Use the mesh selected in the Content Browser."),
 				[this]() { UseContentBrowserSelection(); })
 		]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 4, 0)
@@ -88,7 +88,7 @@ void SEditPartMaker::Construct(const FArguments& InArgs)
 		]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)
 		[
-			AEWToolUI::MakePrimaryButton(LOCTEXT("MakePartButton", "Make part"), LOCTEXT("MakePartTip", "Create the WA_ asset, the parts row and a default-unlocked unlock row."),
+			AEWToolUI::MakePrimaryButton(LOCTEXT("MakePartButton", "Make part"), LOCTEXT("MakePartTip", "Create the WA_ asset, parts row and unlock row."),
 				[this]() { DoMake(); }, TAttribute<bool>::Create(TAttribute<bool>::FGetter::CreateLambda([this]() { return Tables.IsUsable() && Request.Mesh.IsValid(); })))
 		]
 		+ SHorizontalBox::Slot().FillWidth(1.f)
@@ -169,15 +169,15 @@ void SEditPartMaker::Construct(const FArguments& InArgs)
 					.OnSelectionChanged_Lambda([this](TSharedPtr<FString> V, ESelectInfo::Type) { if (V.IsValid()) Request.Gender = *V; })) ]
 				+ SVerticalBox::Slot().AutoHeight()[ MakeRow(LOCTEXT("Face", "Face type"), SAssignNew(FaceCombo, STextComboBox).OptionsSource(&FaceOptions)
 					.OnSelectionChanged_Lambda([this](TSharedPtr<FString> V, ESelectInfo::Type) { if (V.IsValid()) Request.FaceType = *V; }),
-					LOCTEXT("FaceTip", "Default for most parts. Heads use one face type each; reuse makes the menu treat them as one entry.")) ]
+					LOCTEXT("FaceTip", "Heads use one face type each; sharing merges them in the menu.")) ]
 				+ SVerticalBox::Slot().AutoHeight()[ MakeRow(LOCTEXT("Attire", "Attire"), SAssignNew(AttireCombo, STextComboBox).OptionsSource(&AttireOptions)
 					.OnSelectionChanged_Lambda([this](TSharedPtr<FString> V, ESelectInfo::Type) { if (V.IsValid()) Request.Attire = *V; })) ]
 				+ SVerticalBox::Slot().AutoHeight()[ MakeRow(LOCTEXT("WACat", "Category"), SAssignNew(WACategoryCombo, STextComboBox).OptionsSource(&WACategoryOptions)
 					.OnSelectionChanged_Lambda([this](TSharedPtr<FString> V, ESelectInfo::Type) { if (V.IsValid()) Request.WACategory = *V; }),
-					LOCTEXT("WACatTip", "DT_PartsCategory row: decides which body sections are masked and which parts are hidden. None for heads.")) ]
+					LOCTEXT("WACatTip", "DT_PartsCategory row: which body sections are masked. None for heads.")) ]
 				+ SVerticalBox::Slot().AutoHeight()[ MakeRow(LOCTEXT("CompatCat", "Compatible"), SAssignNew(CompatibleCombo, STextComboBox).OptionsSource(&CompatibleOptions)
 					.OnSelectionChanged_Lambda([this](TSharedPtr<FString> V, ESelectInfo::Type) { if (V.IsValid()) Request.CompatibleCategory = *V; }),
-					LOCTEXT("CompatTip", "The parts row's CommpatiablePartsCategory. Vanilla leaves --- for most parts.")) ])
+					LOCTEXT("CompatTip", "CommpatiablePartsCategory. Usually ---.")) ])
 		]
 
 		+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 6)
@@ -198,7 +198,7 @@ void SEditPartMaker::Construct(const FArguments& InArgs)
 						]
 						+ SHorizontalBox::Slot().AutoWidth()
 						[
-							AEWToolUI::MakeButton(LOCTEXT("SuggestParts", "Next free"), LOCTEXT("SuggestPartsTip", "Lowest PartsID not used by any part"),
+							AEWToolUI::MakeButton(LOCTEXT("SuggestParts", "Next free"), LOCTEXT("SuggestPartsTip", "Lowest free PartsID"),
 								[this]() { SuggestIds(true, false); })
 						],
 						LOCTEXT("PartsIdTip", "Must be unique across all parts."))
@@ -217,10 +217,10 @@ void SEditPartMaker::Construct(const FArguments& InArgs)
 						]
 						+ SHorizontalBox::Slot().AutoWidth()
 						[
-							AEWToolUI::MakeButton(LOCTEXT("SuggestUnlock", "Next free"), LOCTEXT("SuggestUnlockTip", "Lowest unlock ID in the custom range not used by any part or unlock row"),
+							AEWToolUI::MakeButton(LOCTEXT("SuggestUnlock", "Next free"), LOCTEXT("SuggestUnlockTip", "Lowest free unlock ID in the custom range"),
 								[this]() { SuggestIds(false, true); })
 						],
-						LOCTEXT("UnlockIdTip", "Gets its own default-unlocked row in the unlock table. Never shared with another part."))
+						LOCTEXT("UnlockIdTip", "Gets its own default-unlocked unlock row."))
 				]
 				+ SVerticalBox::Slot().AutoHeight()
 				[
@@ -228,7 +228,7 @@ void SEditPartMaker::Construct(const FArguments& InArgs)
 						SNew(SCheckBox)
 						.IsChecked_Lambda([this]() { return Request.bOverwrite ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
 						.OnCheckStateChanged_Lambda([this](ECheckBoxState S) { Request.bOverwrite = (S == ECheckBoxState::Checked); }),
-						LOCTEXT("OverwriteTip", "Replace a row this tool (or you) already added to the parts table."))
+						LOCTEXT("OverwriteTip", "Replace a row already in the parts table."))
 				])
 		]
 
@@ -246,7 +246,7 @@ void SEditPartMaker::Construct(const FArguments& InArgs)
 
 	GetMutableDefault<UEditPartMakerSettings>()->OnSettingChanged().AddSP(this, &SEditPartMaker::OnSettingsChanged);
 	ReloadTables();
-	AddLog(TEXT("Pick a skeletal mesh (or select one and press Use selected mesh), check the fields, then Make part."));
+	AddLog(TEXT("Pick a skeletal mesh, check the fields, then Make part."));
 }
 
 TSharedRef<ITableRow> SEditPartMaker::OnGenerateRow(TSharedPtr<FEditPartListItem> Item, const TSharedRef<STableViewBase>& Owner)
@@ -306,7 +306,7 @@ FText SEditPartMaker::GetStatusText() const
 	{
 		return LOCTEXT("NoTables", "Tables not loaded - check Settings.");
 	}
-	return FText::FromString(FString::Printf(TEXT("Parts table: %s (%d rows)    Unlock table: %s (%d rows)    Mesh: %s"),
+	return FText::FromString(FString::Printf(TEXT("Parts: %s (%d rows)    Unlock: %s (%d rows)    Mesh: %s"),
 		*Tables.Parts->GetName(), Tables.Parts->GetRowMap().Num(), *Tables.Unlock->GetName(), Tables.Unlock->GetRowMap().Num(),
 		Request.Mesh.IsValid() ? *Request.Mesh->GetName() : TEXT("(none)")));
 }

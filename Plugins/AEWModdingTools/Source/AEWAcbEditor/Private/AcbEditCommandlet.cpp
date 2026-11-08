@@ -72,7 +72,7 @@ int32 UAcbEditCommandlet::Main(const FString& Params)
 		}
 		if (Cues.Num() == 0)
 		{
-			UE_LOG(LogAEWAcbEditor, Error, TEXT("No cue preset named '%s' for cue sheet %s (built-in or in the plugin settings)."), *PresetName, *Session.GetCueSheetName());
+			UE_LOG(LogAEWAcbEditor, Error, TEXT("No cue preset '%s' for cue sheet %s."), *PresetName, *Session.GetCueSheetName());
 			return 1;
 		}
 	}
@@ -162,7 +162,7 @@ int32 UAcbEditCommandlet::Main(const FString& Params)
 		}
 		if (CueSheetFolder.IsEmpty())
 		{
-			UE_LOG(LogAEWAcbEditor, Error, TEXT("No cue sheet asset named %s in the project: pass -CueSheetFolder=/Game/..."), *Session.GetCueSheetName());
+			UE_LOG(LogAEWAcbEditor, Error, TEXT("No cue sheet %s in the project. Pass -CueSheetFolder=/Game/..."), *Session.GetCueSheetName());
 			return 1;
 		}
 		Request.PackagePath = CueSheetFolder;

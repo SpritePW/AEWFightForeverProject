@@ -162,7 +162,7 @@ int32 FAcbCueDirtyFilter::Flush()
 	}
 	if (Cleaned > 0)
 	{
-		UE_LOG(LogAEWAcbEditor, Log, TEXT("Ignored CriWare's automatic refresh of %d cue asset(s): only cached info changed, so they don't need saving."), Cleaned);
+		UE_LOG(LogAEWAcbEditor, Log, TEXT("Ignored CriWare's cache refresh on %d cue asset(s)."), Cleaned);
 	}
 	return Cleaned;
 }

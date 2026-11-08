@@ -93,13 +93,13 @@ void SArenaMakerPanel::Construct(const FArguments& InArgs)
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 4, 0)
 		[
 			AEWToolUI::MakeButton(LOCTEXT("Sync", "Sync arena list"),
-				LOCTEXT("SyncTip", "Remove mod arenas whose map was deleted from the arena table, the enum and the unlock table, then renumber the mod arenas without gaps (renaming their <ID>_ maps and folders)."),
+				LOCTEXT("SyncTip", "Remove deleted mod arenas and renumber the rest."),
 				[this]() { UAEWArenaTools::SyncArenaList(GetDefault<UAEWArenaMakerSettings>()->bRenumberOnDelete, true); Refresh(); })
 		]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(16, 0, 8, 0)
 		[
 			AEWToolUI::MakePrimaryButton(LOCTEXT("Create", "Create arena"),
-				LOCTEXT("CreateTip", "Copy the selected template or mod arena into a new arena: its maps, sublevels and the blueprints and tables in its folder, re-pointed to the copies. Then label it and (if ticked) add it to the arena list."),
+				LOCTEXT("CreateTip", "Copy the selected arena into a new arena."),
 				[this]() { Create(); }, TAttribute<bool>::Create(TAttribute<bool>::FGetter::CreateLambda(CanCreate)))
 		]
 		+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
@@ -179,7 +179,7 @@ void SArenaMakerPanel::Construct(const FArguments& InArgs)
 								[this]() { NextId = UAEWArenaTools::GetNextArenaId(); if (NextId >= 0) { ArenaId = NextId; } },
 								TAttribute<bool>::Create(TAttribute<bool>::FGetter::CreateLambda([this]() { return bRegister; })))
 						],
-						LOCTEXT("ArenaIdTip", "EArenaID entry and DT_ArenaOriginal row of the new arena. The map is saved as <ID>_<name>."))
+						LOCTEXT("ArenaIdTip", "EArenaID entry and arena row. Map is saved as <ID>_<name>."))
 				]
 				+ SVerticalBox::Slot().AutoHeight()
 				[
@@ -210,7 +210,7 @@ void SArenaMakerPanel::Construct(const FArguments& InArgs)
 				+ SVerticalBox::Slot().AutoHeight()
 				[
 					AEWToolUI::MakeRow(LOCTEXT("Register", "Register"), Check(&bRegister),
-						LOCTEXT("RegisterTip", "Add an EArenaID entry, a DT_ArenaOriginal row and a default-unlocked unlock row."))
+						LOCTEXT("RegisterTip", "Add the enum entry, arena row and unlock row."))
 				]
 				+ SVerticalBox::Slot().AutoHeight()
 				[
@@ -228,7 +228,7 @@ void SArenaMakerPanel::Construct(const FArguments& InArgs)
 							.OnValueChanged_Lambda([this](int32 V) { ChunkId = FMath::Clamp(V, 1, 9999); })
 							.OnValueCommitted_Lambda([this](int32 V, ETextCommit::Type) { ChunkId = FMath::Clamp(V, 1, 9999); })
 						],
-						LOCTEXT("LabelTip", "Create a PrimaryAssetLabel for the arena's maps in this chunk."))
+						LOCTEXT("LabelTip", "Label the arena's maps in this chunk."))
 				]
 				)
 		]
@@ -260,7 +260,7 @@ void SArenaMakerPanel::Construct(const FArguments& InArgs)
 	RenamedHandle = AR.OnAssetRenamed().AddSP(this, &SArenaMakerPanel::OnAssetRenamed);
 
 	Refresh();
-	AddLog(TEXT("Pick a template, set the ID and name, then Create arena. The list updates by itself when templates or arenas change."));
+	AddLog(TEXT("Pick a template, set the ID and name, then Create arena."));
 }
 
 void SArenaMakerPanel::OnAssetChanged(const FAssetData&)
@@ -428,7 +428,7 @@ FText SArenaMakerPanel::GetPreviewText() const
 FText SArenaMakerPanel::GetStatusText() const
 {
 	const UAEWArenaMakerSettings* S = GetDefault<UAEWArenaMakerSettings>();
-	return FText::FromString(FString::Printf(TEXT("Templates: %d    Arena table: %s (%d rows)    Next free arena ID: %d"),
+	return FText::FromString(FString::Printf(TEXT("Templates: %d    Arena table: %s (%d rows)    Next ID: %d"),
 		AllTemplates.Num(), *S->ArenaTable.GetAssetName(), Arenas.Num(), NextId));
 }
 

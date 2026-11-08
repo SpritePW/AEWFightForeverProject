@@ -46,7 +46,7 @@ public:
 		FCookModificationDelegate& Cook = FGameDelegates::Get().GetCookModificationDelegate();
 		if (Cook.IsBound())
 		{
-			UE_LOG(LogAEWModding, Warning, TEXT("The cook modification delegate is already bound - labelled assets are not added to the cook."));
+			UE_LOG(LogAEWModding, Warning, TEXT("Cook delegate already bound; labelled assets not added to the cook."));
 		}
 		else
 		{
@@ -304,7 +304,7 @@ private:
 		}
 		if (Missing > 0 && Missing != LastMissing)
 		{
-			FNotificationInfo Info(FText::FromString(FString::Printf(TEXT("%d asset(s) used by your labelled content aren't in a label, so they won't be cooked. See the Output Log (LogAEWModding) for the list."), Missing)));
+			FNotificationInfo Info(FText::FromString(FString::Printf(TEXT("%d asset(s) used by labelled content aren't labelled and won't be cooked. See LogAEWModding."), Missing)));
 			Info.ExpireDuration = 10.f;
 			FSlateNotificationManager::Get().AddNotification(Info);
 		}
@@ -336,7 +336,7 @@ private:
 		FToolMenuOwnerScoped OwnerScoped(this);
 		AEWMenus::AddGroupedToolEntry("Cook", LOCTEXT("CookGroup", "Cook"), "AEWCookClearUnlabelledChunks",
 			LOCTEXT("ClearChunks", "Clear Unlabelled Chunk Assignments"),
-			LOCTEXT("ClearChunksTip", "List and clear every chunk assignment that doesn't come from a PrimaryAssetLabel: chunk IDs stored in packages (old 'Assign to Chunk') and chunk IDs on Asset Manager rules. Asks before changing anything."),
+			LOCTEXT("ClearChunksTip", "Find and clear chunk IDs not set by a label. Asks first."),
 			FUIAction(FExecuteAction::CreateStatic(&FAEWModdingCoreModule::ClearChunks)));
 		AEWMenus::AddGroupedToolEntry("Cook", LOCTEXT("CookGroup", "Cook"), "AEWCookNameChunks",
 			LOCTEXT("NameChunks", "Package Project"),

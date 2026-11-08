@@ -430,7 +430,7 @@ UBlueprint* UAEWArenaTools::EnsureStartMarkerBlueprint(const FString& ArenaFolde
 			Arrow->SetHiddenInGame(true);
 		}
 		OvAddVariable(BP, StartNameVar, UEdGraphSchema_K2::PC_String, nullptr,
-			TEXT("Name of the player or referee start in ArenaMatch to move here, e.g. PlayerStart_1on1_00 or RefereeStart_Tag."));
+			TEXT("ArenaMatch start to move here, e.g. PlayerStart_1on1_00."));
 	}
 
 	UEdGraph* G = FBlueprintEditorUtils::FindEventGraph(BP);
@@ -463,7 +463,7 @@ UBlueprint* UAEWArenaTools::EnsureCameraOverrideBlueprint(const FString& ArenaFo
 	UClass* CameraClass = OvFindGameplayCameraClass();
 	if (!CameraClass)
 	{
-		UE_LOG(LogAEWArenaOverrides, Error, TEXT("class ELGameplayCamera not found - is the game's C++ module loaded?"));
+		UE_LOG(LogAEWArenaOverrides, Error, TEXT("ELGameplayCamera not found. Is the game module loaded?"));
 		return nullptr;
 	}
 	if (!Table)
@@ -482,7 +482,7 @@ UBlueprint* UAEWArenaTools::EnsureCameraOverrideBlueprint(const FString& ArenaFo
 	{
 		OvAddComponent(BP, UBillboardComponent::StaticClass(), TEXT("Icon"), nullptr);
 		OvAddVariable(BP, CameraTableVar, UEdGraphSchema_K2::PC_Object, UDataTable::StaticClass(),
-			TEXT("Gameplay camera table (row struct GameplayCameraParam) this arena uses instead of DT_GameplayCameraParam."));
+			TEXT("Camera table this arena uses instead of DT_GameplayCameraParam."));
 	}
 
 	UEdGraph* G = FBlueprintEditorUtils::FindEventGraph(BP);
@@ -606,7 +606,7 @@ int32 UAEWArenaTools::AddStartMarkers()
 	}
 	if (Starts.Num() == 0)
 	{
-		OvReport(TEXT("No player or referee starts found. Open the arena's persistent map and make sure its ArenaMatch sublevel is loaded (Levels window)."));
+		OvReport(TEXT("No starts found. Load the arena's ArenaMatch sublevel."));
 		return 0;
 	}
 	Starts.Sort([](const APlayerStart& A, const APlayerStart& B) { return A.GetName() < B.GetName(); });
@@ -634,7 +634,7 @@ int32 UAEWArenaTools::AddStartMarkers()
 		++Added;
 	}
 	World->PersistentLevel->MarkPackageDirty();
-	OvReport(FString::Printf(TEXT("Added %d start marker(s) to %s (%d were already there).\n\nMove the markers you want to change and delete the rest, then save the map. In game each marker moves its start in ArenaMatch to its own position."),
+	OvReport(FString::Printf(TEXT("Added %d start marker(s) to %s (%d already there).\n\nMove the ones to change, delete the rest, then save."),
 		Added, *World->GetMapName(), Existing.Num()));
 	return Added;
 }
@@ -703,12 +703,12 @@ bool UAEWArenaTools::AddCameraOverride()
 	if (Table)
 	{
 		Message += FString::Printf(TEXT("\n\nCamera table: %s%s"), *Table->GetName(),
-			bNewTable ? TEXT(" (new copy of the game's table - tune it with Toggle Camera Preview)") : TEXT(""));
-		Message += TEXT("\nEdit its rows to tune the camera (RadiusMax_Arena = furthest zoom-out outside the ring), then save the map.");
+			bNewTable ? TEXT(" (new copy)") : TEXT(""));
+		Message += TEXT("\nEdit its rows to tune the camera, then save the map.");
 	}
 	else
 	{
-		Message += TEXT("\n\nNo camera table found or copied - set Camera Table on the actor by hand.");
+		Message += TEXT("\n\nNo camera table found. Set Camera Table on the actor.");
 	}
 	OvReport(Message);
 	return true;
@@ -964,7 +964,7 @@ bool UAEWArenaTools::PreviewGameplayCamera()
 	const FName RowName = Settings->CameraPreviewRow;
 	if (!OvReadCameraRow(Table, RowName, Cam))
 	{
-		OvReport(FString::Printf(TEXT("Row '%s' was not found in %s.\n\nSet Camera Preview Row in the Arena Maker settings to one of the table's rows."),
+		OvReport(FString::Printf(TEXT("Row '%s' not found in %s.\n\nSet Camera Preview Row in Arena Maker settings."),
 			*RowName.ToString(), Table ? *Table->GetName() : TEXT("the camera table")));
 		return false;
 	}
@@ -999,7 +999,7 @@ bool UAEWArenaTools::PreviewGameplayCamera()
 	}
 	if (Wrestlers.Num() == 0)
 	{
-		OvReport(TEXT("No wrestler positions. Select the actors to stand in for wrestlers (any actors, e.g. Target Points), or load ArenaMatch so its 1-on-1 starts can be used."));
+		OvReport(TEXT("No wrestler positions. Select stand-in actors or load ArenaMatch."));
 		return false;
 	}
 
@@ -1131,13 +1131,13 @@ bool UAEWArenaTools::PreviewGameplayCamera()
 		*RowName.ToString(), *Table->GetName(), bArenaTable ? TEXT(" (this arena's table)") : TEXT(" (the game's table)"), *Source);
 	Message += FString::Printf(TEXT("Radii: %s (all wrestlers %s the ring), spread %.0f.\n"),
 		bAllInRing ? TEXT("RadiusMin_Ring / RadiusMax_Ring") : TEXT("RadiusMin_Arena / RadiusMax_Arena"), bAllInRing ? TEXT("inside") : TEXT("not all inside"), Spread);
-	Message += FString::Printf(TEXT("Pitch: %.1f%s (Pitch_Min %.1f, Pitch_Max %.1f; it would be %.1f unclamped, CameraOffsetZ adds %.0f).\n"),
+	Message += FString::Printf(TEXT("Pitch: %.1f%s (min %.1f, max %.1f, unclamped %.1f, offset Z %.0f).\n"),
 		CamRot.Pitch, bClamped ? TEXT(", held by the pitch limits") : TEXT(""), Cam.PitchMin, Cam.PitchMax, RawPitch, OffsetZ);
-	Message += FString::Printf(TEXT("Camera: %.0f from the target, %.0f above the wrestlers' feet, at (%.0f, %.0f, %.0f).\n\n"),
+	Message += FString::Printf(TEXT("Camera: %.0f from target, %.0f above feet, at (%.0f, %.0f, %.0f).\n\n"),
 		FVector::Dist(CamLoc, Target), CamLoc.Z - Ground, CamLoc.X, CamLoc.Y, CamLoc.Z);
-	Message += TEXT("Green: the camera and its view. Yellow: the point it frames and the spread. Cyan: the points it keeps in view. Orange: the wrestlers.\n");
-	Message += TEXT("GameplayCameraPreview is selected - look through it with the viewport's camera preview, or right-click it and choose Pilot. It isn't saved with the map; run Toggle Camera Preview again to remove it.\n\n");
-	Message += TEXT("Select actors before running this to place the wrestlers elsewhere (outside the ring uses the Arena radii). Edit the table and run it again to compare.");
+	Message += TEXT("Green: camera. Yellow: framed point. Cyan: kept in view. Orange: wrestlers.\n");
+	Message += TEXT("Look through GameplayCameraPreview or Pilot it. Run again to remove it.\n\n");
+	Message += TEXT("Select actors first to place the wrestlers elsewhere.");
 	OvReport(Message);
 	return true;
 }
@@ -1235,7 +1235,7 @@ UBlueprint* UAEWArenaTools::EnsureEntranceOverrideBlueprint(const FString& Arena
 	UClass* PlayerClass = FindObject<UClass>(nullptr, TEXT("/Script/MovieScene.MovieSceneSequencePlayer"));
 	if (!SequenceActorClass || !InstanceDataClass || !ManagerClass || !CharacterClass || !PlayerClass)
 	{
-		UE_LOG(LogAEWArenaOverrides, Error, TEXT("LevelSequenceActor, DefaultLevelSequenceInstanceData or ELEntranceCutsceneManager not found"));
+		UE_LOG(LogAEWArenaOverrides, Error, TEXT("LevelSequenceActor, DefaultLevelSequenceInstanceData or ELEntranceCutsceneManager not found."));
 		return nullptr;
 	}
 	bool bNew = false;
@@ -1262,14 +1262,14 @@ UBlueprint* UAEWArenaTools::EnsureEntranceOverrideBlueprint(const FString& Arena
 		FBlueprintEditorUtils::AddMemberVariable(BP, DefaultEntranceVar, TransformType, FString::Printf(TEXT("%f,%f,%f|0.000000,0.000000,0.000000|1.000000,1.000000,1.000000"), DefaultEntranceLocation.X, DefaultEntranceLocation.Y, DefaultEntranceLocation.Z));
 		FBlueprintEditorUtils::SetBlueprintOnlyEditableFlag(BP, DefaultEntranceVar, false);
 		FBlueprintEditorUtils::SetBlueprintVariableMetaData(BP, DefaultEntranceVar, nullptr, TEXT("tooltip"),
-			TEXT("Where the game's entrances are staged by default (the top of the ramp in the templates). Everything the entrance sequences show is moved by the difference between this and this actor's transform."));
+			TEXT("Default entrance staging spot. Entrances move by the offset from here to this actor."));
 		FBlueprintEditorUtils::SetBlueprintVariableCategory(BP, DefaultEntranceVar, nullptr, FText::FromString(TEXT("Arena Override")));
 		FEdGraphPinType BoolType;
 		BoolType.PinCategory = UEdGraphSchema_K2::PC_Boolean;
 		FBlueprintEditorUtils::AddMemberVariable(BP, MoveManagerVar, BoolType, TEXT("true"));
 		FBlueprintEditorUtils::SetBlueprintOnlyEditableFlag(BP, MoveManagerVar, false);
 		FBlueprintEditorUtils::SetBlueprintVariableMetaData(BP, MoveManagerVar, nullptr, TEXT("tooltip"),
-			TEXT("Also move the entrance manager (BP_CutscenePawn) by the same amount whenever the game places it."));
+			TEXT("Also move the entrance manager by the same amount."));
 		FBlueprintEditorUtils::SetBlueprintVariableCategory(BP, MoveManagerVar, nullptr, FText::FromString(TEXT("Arena Override")));
 		FBlueprintEditorUtils::AddMemberVariable(BP, LastManagerVar, TransformType);
 	}
@@ -1287,7 +1287,7 @@ UBlueprint* UAEWArenaTools::EnsureEntranceOverrideBlueprint(const FString& Arena
 		FBlueprintEditorUtils::AddMemberVariable(BP, SequenceListVar, StrType, FString::Printf(TEXT("%s,%s"), CrowdSequences, RingSequences));
 		FBlueprintEditorUtils::SetBlueprintOnlyEditableFlag(BP, SequenceListVar, false);
 		FBlueprintEditorUtils::SetBlueprintVariableMetaData(BP, SequenceListVar, nullptr, TEXT("tooltip"),
-			TEXT("Comma-separated entrance sequence names (e.g. LS_000_00008_A_Ent_JonMoxley). With 'List Is Exclusion' this origin handles every entrance except these; without it, only these."));
+			TEXT("Comma-separated entrance sequences, e.g. LS_000_00008_A_Ent_JonMoxley."));
 		FBlueprintEditorUtils::SetBlueprintVariableCategory(BP, SequenceListVar, nullptr, FText::FromString(TEXT("Arena Override")));
 	}
 	if (FBlueprintEditorUtils::FindNewVariableIndex(BP, ExclusionVar) == INDEX_NONE)
@@ -1297,7 +1297,7 @@ UBlueprint* UAEWArenaTools::EnsureEntranceOverrideBlueprint(const FString& Arena
 		FBlueprintEditorUtils::AddMemberVariable(BP, ExclusionVar, BoolType, TEXT("true"));
 		FBlueprintEditorUtils::SetBlueprintOnlyEditableFlag(BP, ExclusionVar, false);
 		FBlueprintEditorUtils::SetBlueprintVariableMetaData(BP, ExclusionVar, nullptr, TEXT("tooltip"),
-			TEXT("On: handle every entrance except the ones in Sequence List (the stage origin). Off: handle only the ones in Sequence List."));
+			TEXT("On: every entrance except Sequence List. Off: only Sequence List."));
 		FBlueprintEditorUtils::SetBlueprintVariableCategory(BP, ExclusionVar, nullptr, FText::FromString(TEXT("Arena Override")));
 	}
 	if (FBlueprintEditorUtils::FindNewVariableIndex(BP, ForceStageVar) == INDEX_NONE)
@@ -1307,7 +1307,7 @@ UBlueprint* UAEWArenaTools::EnsureEntranceOverrideBlueprint(const FString& Arena
 		FBlueprintEditorUtils::AddMemberVariable(BP, ForceStageVar, BoolType, TEXT("false"));
 		FBlueprintEditorUtils::SetBlueprintOnlyEditableFlag(BP, ForceStageVar, false);
 		FBlueprintEditorUtils::SetBlueprintVariableMetaData(BP, ForceStageVar, nullptr, TEXT("tooltip"),
-			TEXT("Swap the entrances in Swap From Entrances for the matching ones in Swap To Entrances in this arena (by default Jon Moxley's and Adam Cole's crowd and ring entrances for their stage ones). Written to DT_ConvertEntranceCutsceneList every time the map is saved."));
+			TEXT("Swap Swap From Entrances for Swap To Entrances in this arena. Written on map save."));
 		FBlueprintEditorUtils::SetBlueprintVariableCategory(BP, ForceStageVar, nullptr, FText::FromString(TEXT("Arena Override")));
 	}
 	const FName SwapVars[] = { SwapFromVar, SwapToVar };
@@ -1323,7 +1323,7 @@ UBlueprint* UAEWArenaTools::EnsureEntranceOverrideBlueprint(const FString& Arena
 			FBlueprintEditorUtils::AddMemberVariable(BP, Key, IntArray, SwapDefaults[SwapIndex]);
 			FBlueprintEditorUtils::SetBlueprintOnlyEditableFlag(BP, Key, false);
 			FBlueprintEditorUtils::SetBlueprintVariableMetaData(BP, Key, nullptr, TEXT("tooltip"),
-				TEXT("Entrance IDs (rows of DT_ELEntranceCutsceneAnimationData). 40 = Jon Moxley through the crowd, 2003 = his title entrance through the crowd, 104 = Jon Moxley from the front (stage), 54 = Adam Cole v2 (ring), 50 = Adam Cole (stage)."));
+				TEXT("Entrance IDs (DT_ELEntranceCutsceneAnimationData rows), e.g. 40, 104."));
 			FBlueprintEditorUtils::SetBlueprintVariableCategory(BP, Key, nullptr, FText::FromString(TEXT("Arena Override")));
 		}
 	}
@@ -1652,7 +1652,7 @@ bool UAEWArenaTools::UpdateEntranceSwaps(bool bReport)
 	{
 		if (bReport)
 		{
-			OvReport(FString::Printf(TEXT("%s isn't in the arena list, so its entrance swaps can't be set. Run Sync Arena List first."), *MapName));
+			OvReport(FString::Printf(TEXT("%s isn't in the arena list. Run Sync Arena List first."), *MapName));
 		}
 		return false;
 	}
@@ -1695,7 +1695,7 @@ bool UAEWArenaTools::UpdateEntranceSwaps(bool bReport)
 	{
 		if (bReport)
 		{
-			OvReport(TEXT("FConvertEntranceCutsceneParam (the game's entrance conversion struct) wasn't found in the project, so the entrance swaps can't be written."));
+			OvReport(TEXT("FConvertEntranceCutsceneParam not found; entrance swaps can't be written."));
 		}
 		return false;
 	}
@@ -1707,7 +1707,7 @@ bool UAEWArenaTools::UpdateEntranceSwaps(bool bReport)
 		{
 			if (bReport)
 			{
-				OvReport(TEXT("No entrance swaps are switched on in this arena, and there is no DT_ConvertEntranceCutsceneList to clean up."));
+				OvReport(TEXT("No entrance swaps on and nothing to clean up."));
 			}
 			return true;
 		}
@@ -1759,7 +1759,7 @@ bool UAEWArenaTools::UpdateEntranceSwaps(bool bReport)
 		{
 			if (bReport)
 			{
-				OvReport(FString::Printf(TEXT("The entrance swaps for arena %d in DT_ConvertEntranceCutsceneList are already up to date."), ArenaId));
+				OvReport(FString::Printf(TEXT("Entrance swaps for arena %d are up to date."), ArenaId));
 			}
 			return true;
 		}
@@ -1826,8 +1826,8 @@ bool UAEWArenaTools::UpdateEntranceSwaps(bool bReport)
 	else
 	{
 		OvReport(Pairs.Num() == 0
-			? FString::Printf(TEXT("Entrance swaps for arena %d removed from DT_ConvertEntranceCutsceneList."), ArenaId)
-			: FString::Printf(TEXT("DT_ConvertEntranceCutsceneList%s: in arena %d the game now swaps these entrances:%s\n\nThe table is shared by every arena (each keeps its own entries), so it has to be packaged with your mod. It has been added to Always Label Tables (Project Settings > AEW Modding Tools), so it is kept in the Base Tables label automatically."),
+			? FString::Printf(TEXT("Removed entrance swaps for arena %d."), ArenaId)
+			: FString::Printf(TEXT("DT_ConvertEntranceCutsceneList%s: arena %d now swaps:%s\n\nIt's added to Always Label Tables so it's packaged with your mod."),
 				bCreated ? TEXT(" (created)") : TEXT(""), ArenaId, *Summary));
 	}
 	return true;
@@ -1936,12 +1936,10 @@ bool UAEWArenaTools::AddEntranceOverride()
 	World->PersistentLevel->MarkPackageDirty();
 	UpdateEntranceSwaps(false);
 
-	OvReport((Added.IsEmpty() ? FString(TEXT("The map already has an EntranceOrigin for every entrance spot.")) : TEXT("Added:") + Added)
-		+ TEXT("\n\nEach origin handles its own entrances (its Sequence List): the crowd origin Jon Moxley's crowd entrances, the ring origin Adam Cole's ring entrance, and the stage origin everything else. ")
-		TEXT("Move and rotate the ones you want to change (leave the others where they are - an unmoved origin changes nothing), then save the map. ")
-		TEXT("In game an origin moves its entrance sequences - wrestlers, cameras and anything else the sequence animates - and the entrance manager by the same amount.\n\n")
-		TEXT("Force Stage Entrances on the stage origin swaps Jon Moxley's and Adam Cole's crowd and ring entrances for their stage ones; it is written to DT_ConvertEntranceCutsceneList every time you save the map.\n\n")
-		TEXT("Turn off the reverse-entrance flag for this arena; this replaces it. Effects and props the game places itself (not in the sequence) may stay at the default spot."));
+	OvReport((Added.IsEmpty() ? FString(TEXT("Every entrance spot already has an EntranceOrigin.")) : TEXT("Added:") + Added)
+		+ TEXT("\n\nMove the origins to change, then save the map. ")
+		TEXT("Unmoved origins change nothing.\n\n")
+		TEXT("Turn off the reverse-entrance flag for this arena; this replaces it."));
 	return true;
 }
 
@@ -2184,9 +2182,9 @@ UBlueprint* UAEWArenaTools::EnsureWeaponMarkerBlueprint(const FString& ArenaFold
 	FEdGraphPinType ClassType;
 	ClassType.PinCategory = UEdGraphSchema_K2::PC_Class;
 	ClassType.PinSubCategoryObject = AActor::StaticClass();
-	OvAddVar(BP, TargetPathVar, StrType, true, TEXT("Class path of the game actor that owns the point, e.g. /Game/GameData/Assets/MatchRule/BP_LightsOutWeaponGenerator.BP_LightsOutWeaponGenerator_C."));
-	OvAddVar(BP, PointNameVar, StrType, true, TEXT("Name of the point (arrow component) on that actor, e.g. Init_10."));
-	OvAddVar(BP, PointDefaultVar, TransformType, true, TEXT("Where the point is when nothing is moved. The point is moved by the difference between this and this marker's transform."));
+	OvAddVar(BP, TargetPathVar, StrType, true, TEXT("Class path of the actor that owns the point."));
+	OvAddVar(BP, PointNameVar, StrType, true, TEXT("Point (arrow component) name, e.g. Init_10."));
+	OvAddVar(BP, PointDefaultVar, TransformType, true, TEXT("Default point position. The point moves by the offset from here to this marker."));
 	OvAddVar(BP, LastTargetVar, ActorType, false, FString());
 	OvAddVar(BP, TargetClassVar, ClassType, false, FString());
 	OvAddVar(BP, WeaponClassVar, ClassType, false, FString());
@@ -2399,11 +2397,9 @@ int32 UAEWArenaTools::AddWeaponPointMarkers()
 		++Added;
 	}
 	World->PersistentLevel->MarkPackageDirty();
-	OvReport(FString::Printf(TEXT("Added %d weapon point marker(s) (%d were already there)%s.\n\n")
-		TEXT("LightsOut_Init_* are where Lights Out weapons start, the other LightsOut_ markers where they appear later or are thrown in from; Placement_ markers are the ladder and thumbtack spots. ")
-		TEXT("Move the ones you want to change and leave or delete the rest - a marker that isn't moved changes nothing. Then save the map.\n\n")
-		TEXT("In game each moved marker moves its point when the game creates it, and moves a weapon already lying on that point with it."),
-		Added, Existing.Num(), bRing ? TEXT(", placed around BP_Ring") : TEXT(" (no BP_Ring found, so they are placed around the world origin)")));
+	OvReport(FString::Printf(TEXT("Added %d weapon point marker(s) (%d already there)%s.\n\n")
+		TEXT("Move the ones to change, then save. Unmoved markers change nothing."),
+		Added, Existing.Num(), bRing ? TEXT(", placed around BP_Ring") : TEXT(", around the world origin (no BP_Ring)")));
 	return Added;
 }
 
@@ -2420,7 +2416,7 @@ bool UAEWArenaTools::AddMatchRuleOverrideNodes()
 	UFunction* SetRule = Interface ? Interface->FindFunctionByName(TEXT("SetMatchRule")) : nullptr;
 	if (!GetRule || !SetRule || !RuleStruct)
 	{
-		OvReport(FString::Printf(TEXT("Could not load the game's match rule interface or struct:\n%s %s\n%s %s"),
+		OvReport(FString::Printf(TEXT("Couldn't load the match rule interface or struct:\n%s %s\n%s %s"),
 			GameInstanceInterfacePath, (GetRule && SetRule) ? TEXT("ok") : TEXT("missing"), MatchRuleStructPath, RuleStruct ? TEXT("ok") : TEXT("missing")));
 		return false;
 	}
@@ -2483,8 +2479,8 @@ bool UAEWArenaTools::AddMatchRuleOverrideNodes()
 	World->PersistentLevel->MarkPackageDirty();
 	const bool bOk = LBP->Status != BS_Error;
 	OvReport(bOk
-		? TEXT("Added a match rule override to the Level Blueprint.\n\nBeginPlay reads the game's match rule, saves it in OriginalMatchRule, passes it through 'Set members in FMatchRule' and sets it back on the game instance. EndPlay restores the saved rule. It runs first on BeginPlay, before your existing nodes.\n\nSelect the Set members node and tick the rule fields you want to change in its Details panel, set their values, compile and save the map.")
-		: TEXT("The nodes were added but the Level Blueprint has compile errors - open it and check the Compiler Results."));
+		? TEXT("Added a match rule override to the Level Blueprint.\n\nTick the fields to change on the Set members node, set them, compile and save.")
+		: TEXT("Nodes added, but the Level Blueprint has compile errors."));
 	return bOk;
 }
 
@@ -2730,7 +2726,7 @@ namespace
 			SNew(SCheckBox)
 			.IsChecked_Lambda([DeletePtr]() { return *DeletePtr ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
 			.OnCheckStateChanged_Lambda([DeletePtr](ECheckBoxState State) { *DeletePtr = State == ECheckBoxState::Checked; })
-			.ToolTipText(LOCTEXT("RemoveAssetsTip", "The map is saved first so nothing in it still points at the deleted assets."))
+			.ToolTipText(LOCTEXT("RemoveAssetsTip", "The map is saved first."))
 			[
 				SNew(STextBlock).Text(FText::FromString(FString::Printf(TEXT("Also delete their blueprints and camera table from %s"), *Folder)))
 			]
@@ -2918,7 +2914,7 @@ int32 UAEWArenaTools::RemoveOverrides()
 	}
 	if (Groups[2].bOn)
 	{
-		Message += TEXT("\nThis arena's entrance swaps were taken out of DT_ConvertEntranceCutsceneList.");
+		Message += TEXT("\nRemoved this arena's entrance swaps.");
 	}
 	if (ToDelete.Num() == 0)
 	{
@@ -2972,7 +2968,7 @@ UBlueprint* UAEWArenaTools::EnsureBarricadeGuardBlueprint(const FString& ArenaFo
 {
 	if (!PieceClass || !PieceClass->FindPropertyByName(ConditionVar) || !PieceClass->FindFunctionByName(TEXT("ResetShake")))
 	{
-		UE_LOG(LogAEWArenaOverrides, Error, TEXT("%s has no BarricadeCondition / ResetShake - can't build the barricade guard"), PieceClass ? *PieceClass->GetName() : TEXT("(no class)"));
+		UE_LOG(LogAEWArenaOverrides, Error, TEXT("%s has no BarricadeCondition / ResetShake; can't build the barricade guard."), PieceClass ? *PieceClass->GetName() : TEXT("(no class)"));
 		return nullptr;
 	}
 	bool bNew = false;
@@ -2988,11 +2984,11 @@ UBlueprint* UAEWArenaTools::EnsureBarricadeGuardBlueprint(const FString& ArenaFo
 	FEdGraphPinType BoolType;
 	BoolType.PinCategory = UEdGraphSchema_K2::PC_Boolean;
 	OvAddVar(BP, GuardPiecesVar, ActorArray, true, TEXT("The invisible barricade pieces this guard looks after."));
-	OvAddVar(BP, GuardMeshesVar, ActorArray, true, TEXT("Your mesh actors for these pieces. They are hidden and lose collision when the barricade is knocked down."));
-	OvAddVar(BP, GuardKnockVar, BoolType, true, TEXT("Moves can knock this barricade down. When it goes down, the meshes are hidden and stop blocking. Untick to keep it standing whatever happens."));
-	OvAddVar(BP, GuardDownVar, BoolType, true, TEXT("The barricade acts as if it's already knocked down from the start of the match (moves treat it as down). The meshes stay as they are."));
+	OvAddVar(BP, GuardMeshesVar, ActorArray, true, TEXT("Mesh actors hidden when the barricade is knocked down."));
+	OvAddVar(BP, GuardKnockVar, BoolType, true, TEXT("Moves can knock this barricade down."));
+	OvAddVar(BP, GuardDownVar, BoolType, true, TEXT("Starts the match knocked down."));
 	OvAddVar(BP, GuardClimbVar, BoolType, true, TEXT("Wrestlers can climb onto this barricade."));
-	OvAddVar(BP, GuardMovesVar, BoolType, true, TEXT("Wrestlers can lean or sit on this barricade, be thrown into it and have barricade moves done to them there. Untick to make it a plain wall: its barricade reaction and hit zones are switched off for the match."));
+	OvAddVar(BP, GuardMovesVar, BoolType, true, TEXT("Wrestlers can use this barricade. Off = a plain wall."));
 	const int32 MovesIndex = FBlueprintEditorUtils::FindNewVariableIndex(BP, GuardMovesVar);
 	if (MovesIndex != INDEX_NONE)
 	{

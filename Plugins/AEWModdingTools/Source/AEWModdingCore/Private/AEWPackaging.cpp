@@ -653,7 +653,7 @@ namespace AEWPackaging
 		if (Relaxed.Num() > 0)
 		{
 			UEditorLoadingAndSavingUtils::SavePackages(Relaxed, false);
-			AddSection(Log, TEXT("Unticked labels changed from Never Cook to 'cook only if referenced' (their folders stay excluded):"), RelaxedNames);
+			AddSection(Log, TEXT("Unticked labels changed from Never Cook to Development Cook:"), RelaxedNames);
 		}
 		for (const FAssetData& A : Labels)
 		{
@@ -784,7 +784,7 @@ namespace AEWPackaging
 		});
 		if (DroppedMaps.Num() > 0)
 		{
-			AddSection(Log, TEXT("Taken out of 'List of maps to include' (a label decides whether they cook, or the map no longer exists):"), DroppedMaps);
+			AddSection(Log, TEXT("Removed from 'List of maps to include':"), DroppedMaps);
 		}
 		const bool bSettingsChanged = bWasCookAll || PS->bCookMapsOnly || ListKey(PS->DirectoriesToNeverCook) != ListKey(NewList) || PS->MapsToCook.Num() != MapsBefore;
 		PS->DirectoriesToNeverCook = NewList;
@@ -840,8 +840,8 @@ namespace AEWPackaging
 		}
 
 		Log.Add(Missing.Num() > 0
-			? FString::Printf(TEXT("Cook settings updated - %d unlabelled asset(s) need attention."), Missing.Num())
-			: TEXT("Cook settings updated - only labelled content will be cooked."));
+			? FString::Printf(TEXT("Cook settings updated; %d unlabelled asset(s) need attention."), Missing.Num())
+			: TEXT("Cook settings updated; only labelled content is cooked."));
 		Log.Add(TEXT(""));
 		Log.Add(FString::Printf(TEXT("Labels: %d"), LabelCount));
 		Log.Add(FString::Printf(TEXT("Mod chunks: %s"), ChunkLine.IsEmpty() ? TEXT("none") : *ChunkLine));
@@ -849,7 +849,7 @@ namespace AEWPackaging
 		Log.Add(FString::Printf(TEXT("Cook everything: %s"), bWasCookAll ? TEXT("turned off") : TEXT("off")));
 		if (Missing.Num() > 0)
 		{
-			AddSection(Log, TEXT("Used but not labelled, so not cooked (move them into a labelled folder or add them to a label):"), Missing);
+			AddSection(Log, TEXT("Used but not labelled, so not cooked:"), Missing);
 		}
 		if (OutMissing)
 		{

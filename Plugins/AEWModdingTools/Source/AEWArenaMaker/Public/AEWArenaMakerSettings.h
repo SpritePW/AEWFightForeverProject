@@ -22,31 +22,31 @@ public:
 
 	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
 
-	UPROPERTY(EditAnywhere, config, Category = "Arena List", meta = (AllowedClasses = "UserDefinedEnum", DisplayName = "Arena ID Enum", ToolTip = "The enum of arena IDs (EArenaID). A new arena gets a new entry here."))
+	UPROPERTY(EditAnywhere, config, Category = "Arena List", meta = (AllowedClasses = "UserDefinedEnum", DisplayName = "Arena ID Enum", ToolTip = "Enum of arena IDs (EArenaID)."))
 	FSoftObjectPath ArenaEnum;
 
-	UPROPERTY(EditAnywhere, config, Category = "Arena List", meta = (AllowedClasses = "DataTable", DisplayName = "Arena Table", ToolTip = "The arena table the game reads (DT_ArenaOriginal). Used to find used IDs and names and the row to copy."))
+	UPROPERTY(EditAnywhere, config, Category = "Arena List", meta = (AllowedClasses = "DataTable", DisplayName = "Arena Table", ToolTip = "Arena table the game reads (DT_ArenaOriginal)."))
 	FSoftObjectPath ArenaTable;
 
-	UPROPERTY(EditAnywhere, config, Category = "Arena List", meta = (AllowedClasses = "DataTable", DisplayName = "New Arena Rows Table", ToolTip = "New arena rows are written here. Must be a parent of the Arena Table."))
+	UPROPERTY(EditAnywhere, config, Category = "Arena List", meta = (AllowedClasses = "DataTable", DisplayName = "New Arena Rows Table", ToolTip = "New arena rows go here. Must be a parent of Arena Table."))
 	FSoftObjectPath ArenaNewTable;
 
-	UPROPERTY(EditAnywhere, config, Category = "Arena List", meta = (DisplayName = "Display Name Via Enum Text", ToolTip = "The game shows ST_Name/ST_Key looked up in the localization table. Give the arena's enum entry a localizable display name and point ST_Name/ST_Key at its namespace and key, so the display name needs no string table. Sync Arena List applies it to existing arenas, using their Arena Name."))
+	UPROPERTY(EditAnywhere, config, Category = "Arena List", meta = (DisplayName = "Display Name Via Enum Text", ToolTip = "Give arenas a localizable display name without a string table."))
 	bool bLocalizedDisplayName = true;
 
 	UPROPERTY(EditAnywhere, config, Category = "Arena List", meta = (DisplayName = "Display Name Namespace", EditCondition = "bLocalizedDisplayName"))
 	FString DisplayNameNamespace = TEXT("AEWModArena");
 
-	UPROPERTY(EditAnywhere, config, Category = "Unlocks", meta = (DisplayName = "Create Unlock Row", ToolTip = "Give each new arena its own default-unlocked unlock row and point the arena's ItemID at it."))
+	UPROPERTY(EditAnywhere, config, Category = "Unlocks", meta = (DisplayName = "Create Unlock Row", ToolTip = "Give each new arena its own default-unlocked unlock row."))
 	bool bCreateUnlock = true;
 
-	UPROPERTY(EditAnywhere, config, Category = "Unlocks", meta = (AllowedClasses = "DataTable", DisplayName = "Unlock Table", ToolTip = "New unlock rows are written here. Must be a parent of the Base Unlock Table."))
+	UPROPERTY(EditAnywhere, config, Category = "Unlocks", meta = (AllowedClasses = "DataTable", DisplayName = "Unlock Table", ToolTip = "New unlock rows go here. Must be a parent of Base Unlock Table."))
 	FSoftObjectPath UnlockTable;
 
-	UPROPERTY(EditAnywhere, config, Category = "Unlocks", meta = (AllowedClasses = "DataTable", DisplayName = "Base Unlock Table", ToolTip = "The composite unlock table the game reads. Used to find used unlock IDs and the template row."))
+	UPROPERTY(EditAnywhere, config, Category = "Unlocks", meta = (AllowedClasses = "DataTable", DisplayName = "Base Unlock Table", ToolTip = "Composite unlock table the game reads."))
 	FSoftObjectPath BaseUnlockTable;
 
-	UPROPERTY(EditAnywhere, config, Category = "Unlocks", meta = (DisplayName = "Unlock Template Row", ToolTip = "Unlock row copied when the template's arena has no unlock row of its own."))
+	UPROPERTY(EditAnywhere, config, Category = "Unlocks", meta = (DisplayName = "Unlock Template Row", ToolTip = "Unlock row copied when the template arena has none."))
 	FName UnlockTemplateRow;
 
 	UPROPERTY(EditAnywhere, config, Category = "Unlocks", meta = (DisplayName = "First Unlock ID"))
@@ -55,52 +55,52 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Unlocks", meta = (DisplayName = "Last Unlock ID"))
 	int32 LastUnlockID = 10199999;
 
-	UPROPERTY(EditAnywhere, config, Category = "Removing", meta = (DisplayName = "Update Tables When A Map Is Deleted", ToolTip = "When a mod arena's map is deleted (for example by deleting its folder), remove its arena row, enum entry and unlock row."))
+	UPROPERTY(EditAnywhere, config, Category = "Removing", meta = (DisplayName = "Update Tables When A Map Is Deleted", ToolTip = "Remove an arena's rows and enum entry when its map is deleted."))
 	bool bSyncOnDelete = true;
 
-	UPROPERTY(EditAnywhere, config, Category = "Removing", meta = (DisplayName = "Renumber Arena IDs", ToolTip = "After removing an arena, close the gap: the mod arenas after it move down one ID (rows, ArenaId, enum entries)."))
+	UPROPERTY(EditAnywhere, config, Category = "Removing", meta = (DisplayName = "Renumber Arena IDs", ToolTip = "Renumber mod arenas to close gaps."))
 	bool bRenumberOnDelete = true;
 
-	UPROPERTY(EditAnywhere, config, Category = "Level Blueprints", meta = (DisplayName = "Update Level Names In Level Blueprints", ToolTip = "When maps are copied from a template or renamed to a new ID, replace the old map and sublevel names typed into Level Blueprint pins and variable defaults (Load Stream Level, Get Streaming Level, name literals...) and recompile."))
+	UPROPERTY(EditAnywhere, config, Category = "Level Blueprints", meta = (DisplayName = "Update Level Names In Level Blueprints", ToolTip = "Update map names in Level Blueprints when maps are copied or renamed."))
 	bool bFixLevelBlueprints = true;
 
-	UPROPERTY(EditAnywhere, config, Category = "Shared Sublevels", meta = (DisplayName = "Keep Shared", ToolTip = "Always Loaded sublevels a template streams from outside its own folder (ArenaCollider_01, ArenaAudience_01, ArenaLightingSample...) are copied into each new arena so it can change them. Sublevels named here stay shared. Blueprint-streamed sublevels (ArenaVictory, entrance lights...) always stay shared because the game loads them by name."))
+	UPROPERTY(EditAnywhere, config, Category = "Shared Sublevels", meta = (DisplayName = "Keep Shared", ToolTip = "Sublevels that stay shared instead of being copied."))
 	TArray<FString> KeepSharedSublevels;
 
-	UPROPERTY(EditAnywhere, config, Category = "Barricades", meta = (DisplayName = "Barricade Class", ToolTip = "Game barricade piece Make Barricade From Selected builds on. Its model is removed and your mesh put in its place, so only its behaviour and reaction, hit and weapon boxes are used.", MetaClass = "Actor"))
+	UPROPERTY(EditAnywhere, config, Category = "Barricades", meta = (DisplayName = "Barricade Class", ToolTip = "Game barricade piece Make Barricade uses.", MetaClass = "Actor"))
 	FSoftClassPath BarricadeClass = FSoftClassPath(TEXT("/Game/GameData/Resources/Models/EmvData/Arean/Common/Barricade/0000_Base/BP_Barricade.BP_Barricade_C"));
 
-	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Seat Gap", ClampMin = "0", ToolTip = "Distance between people along a row (cm) for Fill Audience From Selected. 0 = spread each row evenly across the plane."))
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Seat Gap", ClampMin = "0", ToolTip = "Gap between people in a row (cm). 0 = spread evenly."))
 	float AudienceSeatSpacing = 70.f;
 
-	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Row Gap", ClampMin = "0", ToolTip = "Distance between rows, towards the ring (cm). 0 = spread the rows evenly over the plane."))
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Row Gap", ClampMin = "0", ToolTip = "Gap between rows (cm). 0 = spread evenly."))
 	float AudienceRowSpacing = 90.f;
 
-	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Per Row", ClampMin = "1", ToolTip = "Fill Audience: how many people in each row."))
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Per Row", ClampMin = "1", ToolTip = "People in each row."))
 	int32 AudiencePerRow = 10;
 
-	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Rows", ClampMin = "1", ToolTip = "Fill Audience: how many rows."))
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Rows", ClampMin = "1", ToolTip = "Number of rows."))
 	int32 AudienceRows = 5;
 
-	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Curve", ClampMin = "-270", ClampMax = "270", Units = "Degrees", ToolTip = "Fill Audience: bend the rows into arcs (0 = straight)."))
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Curve", ClampMin = "-270", ClampMax = "270", Units = "Degrees", ToolTip = "Bend rows into an arc (degrees). 0 = straight."))
 	float AudienceRowCurve = 0.f;
 
-	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Fill", ClampMin = "0.05", ClampMax = "1", ToolTip = "Share of spots that get a person (1 = every spot)."))
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Fill", ClampMin = "0.05", ClampMax = "1", ToolTip = "Share of spots that get a person."))
 	float AudienceFill = 0.85f;
 
-	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Straightness", ClampMin = "0", ClampMax = "1", ToolTip = "How straight the rows are: 1 = everyone exactly in line, lower values scatter people forwards, backwards and sideways."))
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Straightness", ClampMin = "0", ClampMax = "1", ToolTip = "1 = in line; lower scatters people."))
 	float AudienceStraightness = 0.8f;
 
-	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Max Slope", ClampMin = "0", ClampMax = "60", Units = "Degrees", ToolTip = "Surfaces steeper than this are not stood on."))
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Max Slope", ClampMin = "0", ClampMax = "60", Units = "Degrees", ToolTip = "Steepest surface people stand on."))
 	float AudienceMaxSlope = 30.f;
 
-	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Type", ToolTip = "By distance: people near the ring, billboards beyond Billboards Beyond. People only / Billboards only: the whole fill is one kind."))
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Type", ToolTip = "Distance: people near the ring, billboards further out."))
 	EAEWCrowdType AudienceCrowdType = EAEWCrowdType::ByDistance;
 
-	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Billboards From", ClampMin = "0", ToolTip = "People further than this from the ring (cm) are flat billboard crowd instead of full models, like the game's back rows. 0 = always full models."))
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Billboards From", ClampMin = "0", ToolTip = "Beyond this distance from the ring (cm), use billboards. 0 = never."))
 	float AudienceBillboardDistance = 0.f;
 
-	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (AllowedClasses = "World", DisplayName = "Crowd Source", ToolTip = "Level whose crowd (BP_Audience people and billboards) is copied when the open arena has none of its own."))
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (AllowedClasses = "World", DisplayName = "Crowd Source", ToolTip = "Level whose crowd is copied when the arena has none."))
 	FSoftObjectPath AudienceTemplateLevel = FSoftObjectPath(TEXT("/Game/GameData/Levels/ArenaBase/Audience/ArenaAudience_01.ArenaAudience_01"));
 
 	UPROPERTY(config)
@@ -112,10 +112,10 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Defaults", meta = (ContentDir, DisplayName = "Parent Folder For New Arenas"))
 	FDirectoryPath DefaultParentFolder;
 
-	UPROPERTY(EditAnywhere, config, Category = "Arena Overrides", meta = (AllowedClasses = "DataTable", DisplayName = "Game Camera Table", ToolTip = "The game's gameplay camera table (DT_GameplayCameraParam). Add Camera Override copies it into the arena folder."))
+	UPROPERTY(EditAnywhere, config, Category = "Arena Overrides", meta = (AllowedClasses = "DataTable", DisplayName = "Game Camera Table", ToolTip = "Gameplay camera table (DT_GameplayCameraParam)."))
 	FSoftObjectPath GameCameraTable = FSoftObjectPath(TEXT("/Game/GameData/Assets/DataTable/DT_GameplayCameraParam.DT_GameplayCameraParam"));
 
-	UPROPERTY(EditAnywhere, config, Category = "Arena Overrides", meta = (DisplayName = "Camera Preview Row", ToolTip = "Row of the camera table that Toggle Camera Preview shows."))
+	UPROPERTY(EditAnywhere, config, Category = "Arena Overrides", meta = (DisplayName = "Camera Preview Row", ToolTip = "Camera table row Toggle Camera Preview shows."))
 	FName CameraPreviewRow = TEXT("Ring_NM");
 
 };

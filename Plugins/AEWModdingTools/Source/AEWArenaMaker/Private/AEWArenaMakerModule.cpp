@@ -24,7 +24,7 @@ public:
 		FGlobalTabmanager::Get()->RegisterNomadTabSpawner(ArenaTemplateTabName,
 			FOnSpawnTab::CreateRaw(this, &FAEWArenaMakerModule::SpawnTab))
 			.SetDisplayName(LOCTEXT("TabTitle", "Arena Maker"))
-			.SetTooltipText(LOCTEXT("TabTip", "Create new arenas from imported templates"))
+			.SetTooltipText(LOCTEXT("TabTip", "Create new arenas from templates"))
 			.SetMenuType(ETabSpawnerMenuType::Hidden);
 
 		UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FAEWArenaMakerModule::RegisterMenus));
@@ -173,57 +173,57 @@ private:
 		FToolMenuOwnerScoped OwnerScoped(this);
 		AEWMenus::AddToolEntry("OpenAEWArenaMaker",
 			LOCTEXT("OpenLabel", "Arena Maker"),
-			LOCTEXT("OpenTip", "Copy an imported arena template (map + its own sublevels) into a new arena and add it to the game's arena list."),
+			LOCTEXT("OpenTip", "Copy an imported arena template into a new arena."),
 			FUIAction(FExecuteAction::CreateStatic(&UAEWArenaTools::OpenDialog)));
 		const FText ArenaLabel = LOCTEXT("ArenaGroup", "Arena");
 		const FText OverridesLabel = LOCTEXT("OverridesGroup", "Overrides");
 		AEWMenus::AddSubGroupedToolEntry("Arena", ArenaLabel, "Overrides", OverridesLabel, "AEWArenaStartMarkers",
 			LOCTEXT("StartMarkers", "Add Start Markers"),
-			LOCTEXT("StartMarkersTip", "Create BP_StartMarker in the open arena's folder and place one on every player and referee start of ArenaMatch. Move the ones you want to change and delete the rest; in game they move ArenaMatch's starts for this arena only."),
+			LOCTEXT("StartMarkersTip", "Place markers to move the player and referee starts in this arena."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::AddStartMarkers(); })));
 		AEWMenus::AddSubGroupedToolEntry("Arena", ArenaLabel, "Overrides", OverridesLabel, "AEWArenaCameraOverride",
 			LOCTEXT("CameraOverride", "Add Camera Override"),
-			LOCTEXT("CameraOverrideTip", "Create BP_CameraOverride and a copy of the gameplay camera table in the open arena's folder and place the override in the map. In game the camera uses that table in this arena only; tune its rows with Toggle Camera Preview."),
+			LOCTEXT("CameraOverrideTip", "Add a camera table override for this arena."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::AddCameraOverride(); })));
 		AEWMenus::AddSubGroupedToolEntry("Arena", ArenaLabel, "Overrides", OverridesLabel, "AEWArenaEntranceOverride",
 			LOCTEXT("EntranceOverride", "Add Entrance Override"),
-			LOCTEXT("EntranceOverrideTip", "Create BP_EntranceOverride in the open arena's folder and place EntranceOrigins for the stage, crowd and ring entrances. Move them to your set; in game the entrances in this arena move with them. Force Stage Entrances is written to the game's entrance conversion table every time you save the map."),
+			LOCTEXT("EntranceOverrideTip", "Place markers to move the stage, crowd and ring entrances in this arena."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::AddEntranceOverride(); })));
 		AEWMenus::AddSubGroupedToolEntry("Arena", ArenaLabel, "Overrides", OverridesLabel, "AEWArenaWeaponPoints",
 			LOCTEXT("WeaponPoints", "Add Weapon Point Markers"),
-			LOCTEXT("WeaponPointsTip", "Create BP_WeaponPointMarker in the open arena's folder and place a marker on every Lights Out weapon spawn point and every ladder / thumbtack placement point. Move the ones you want to change; in game they move those points for this arena only."),
+			LOCTEXT("WeaponPointsTip", "Place markers to move weapon and ladder/thumbtack points in this arena."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::AddWeaponPointMarkers(); })));
 		AEWMenus::AddSubGroupedToolEntry("Arena", ArenaLabel, "Overrides", OverridesLabel, "AEWArenaRuleOverride",
 			LOCTEXT("RuleNodes", "Add Rule Override"),
-			LOCTEXT("RuleNodesTip", "Add nodes to the open arena's Level Blueprint that change the match rule for matches in this arena: on BeginPlay they read the game's match rule, pass it through 'Set members in FMatchRule' (tick the fields you want to change) and set it back; on EndPlay they restore the original."),
+			LOCTEXT("RuleNodesTip", "Add Level Blueprint nodes that change the match rule in this arena."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::AddMatchRuleOverrideNodes(); })));
 		AEWMenus::AddSubGroupedToolEntry("Arena", ArenaLabel, "Overrides", OverridesLabel, "AEWArenaRemoveOverrides",
 			LOCTEXT("RemoveOverrides", "Remove Overrides..."),
-			LOCTEXT("RemoveOverridesTip", "Choose which overrides to take out of the open arena: their placed actors, their blueprints and camera table in the arena's folder, the rule override nodes and the arena's entrance swaps."),
+			LOCTEXT("RemoveOverridesTip", "Choose overrides to remove from the open arena."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::RemoveOverrides(); })));
 		AEWMenus::AddGroupedToolEntry("Arena", ArenaLabel, "AEWArenaMakeBarricade",
 			LOCTEXT("MakeBarricade", "Make Barricade From Selected"),
-			LOCTEXT("MakeBarricadeTip", "Turn the selected mesh actors into barricades: each mesh stays as it is and invisible game barricade pieces (one per barricade length) are placed along it, facing the ring, with their reaction, hit and weapon boxes fitted. A <mesh>_Barricade_Settings actor is added next to it: its Details (Arena Override section) has Can Be Climbed, Allow Barricade Moves, Can Be Knocked Down and Starts Down."),
+			LOCTEXT("MakeBarricadeTip", "Turn the selected meshes into barricades."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::MakeBarricadeFromSelected(); })));
 		AEWMenus::AddGroupedToolEntry("Arena", ArenaLabel, "AEWArenaBarricadeSettings",
 			LOCTEXT("BarricadeSettings", "Add Barricade Settings To Selected"),
-			LOCTEXT("BarricadeSettingsTip", "Give the selected barricade pieces (e.g. a split game barricade set) a Settings actor with Can Be Climbed, Allow Barricade Moves, Can Be Knocked Down and Starts Down. Barricade sets split from now on get one automatically."),
+			LOCTEXT("BarricadeSettingsTip", "Add a Settings actor to the selected barricade pieces."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::AddBarricadeSettingsToSelected(); })));
 		AEWMenus::AddGroupedToolEntry("Arena", ArenaLabel, "AEWArenaRestoreMeshes",
 			LOCTEXT("RestoreMeshes", "Restore Meshes From Barricades"),
-			LOCTEXT("RestoreMeshesTip", "Undo Make Barricade From Selected: remove the barricade pieces made for the selected meshes (or for all of them in the level if nothing is selected) and leave the plain meshes. Barricades made by older versions get their meshes rebuilt."),
+			LOCTEXT("RestoreMeshesTip", "Remove barricade pieces from the selected meshes (all if none selected)."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::RestoreMeshesFromBarricades(); })));
 		AEWMenus::AddGroupedToolEntry("Arena", ArenaLabel, "AEWArenaFillAudience",
 			LOCTEXT("FillAudience", "Fill Audience From Selected"),
-			LOCTEXT("FillAudienceTip", "Place an Empty Actor (Place Actors > Basic > Empty Actor) where the crowd should go, turned so its X arrow points the way they should face, select it and run this. A window sets people per row, rows, spacing and fill with a live preview that follows the marker as you move or rotate it. The crowd stands on whatever is under it and the marker is removed. Selecting meshes without a marker fills them completely."),
+			LOCTEXT("FillAudienceTip", "Fill around the selected Empty Actor with crowd, facing its X arrow."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::FillAudienceFromSelected(); })));
 		AEWMenus::AddGroupedToolEntry("Arena", ArenaLabel, "AEWArenaClearAudience",
 			LOCTEXT("ClearAudience", "Clear Generated Audience"),
-			LOCTEXT("ClearAudienceTip", "Remove generated crowd: on the selected meshes, the selected crowd blocks, or all of it if nothing is selected. The level's own crowd is kept."),
+			LOCTEXT("ClearAudienceTip", "Remove generated crowd from the selection (all if none selected)."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::ClearGeneratedAudience(); })));
 		AEWMenus::AddGroupedToolEntry("Arena", ArenaLabel, "AEWArenaCameraPreview",
 			LOCTEXT("CameraPreview", "Toggle Camera Preview"),
-			LOCTEXT("CameraPreviewTip", "Show where the gameplay camera settles for this arena's camera table (Camera Preview Row in the settings), using the game's own camera maths, with a GameplayCameraPreview camera you can look through. Uses the selected actors as wrestlers, or the 1-on-1 starts if nothing is selected. Run it again to remove the preview."),
+			LOCTEXT("CameraPreviewTip", "Show where the gameplay camera settles. Run again to remove."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::ToggleCameraPreview(); })));
 
 		UToolMenus* Menus = UToolMenus::Get();

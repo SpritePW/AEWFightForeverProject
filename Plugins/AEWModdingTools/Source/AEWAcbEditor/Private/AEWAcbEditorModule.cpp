@@ -129,7 +129,7 @@ private:
 			{
 				Names.Add(FPaths::GetBaseFilename(File));
 			}
-			UE_LOG(LogAEWAcbEditor, Display, TEXT("Re-registered %d cue asset(s) the editor lost track of while saving (their files were still on disk): %s"),
+			UE_LOG(LogAEWAcbEditor, Display, TEXT("Re-registered %d cue asset(s) lost while saving: %s"),
 				Files.Num(), *FString::Join(Names, TEXT(", ")));
 		}
 		return false;

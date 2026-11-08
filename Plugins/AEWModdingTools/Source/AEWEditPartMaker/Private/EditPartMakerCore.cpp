@@ -110,11 +110,11 @@ FEditPartMakerTables EditPartMaker::LoadTables(TArray<FString>& OutErrors)
 	{
 		if (!Table)
 		{
-			OutErrors.Add(FString::Printf(TEXT("%s not found: %s (Project Settings > Plugins > Edit Part Maker)"), What, *Path.ToString()));
+			OutErrors.Add(FString::Printf(TEXT("%s not found: %s"), What, *Path.ToString()));
 		}
 		else if (!Table->GetRowStruct())
 		{
-			OutErrors.Add(FString::Printf(TEXT("%s has no row struct - is the game's Creation/ELITE_Game stub module loaded?"), *Table->GetName()));
+			OutErrors.Add(FString::Printf(TEXT("%s has no row struct. Is the game stub module loaded?"), *Table->GetName()));
 		}
 	};
 	Check(Tables.Parts, Settings->PartsTable, TEXT("Parts table"));
@@ -232,13 +232,13 @@ void EditPartMaker::Validate(const FEditPartMakerTables& Tables, const FPartRequ
 	USkeletalMesh* Mesh = R.Mesh.Get();
 	if (!Mesh) Errors.Add(TEXT("No skeletal mesh selected."));
 	if (R.RowName.IsEmpty() || R.RowName.Contains(TEXT(" ")) || R.RowName.Contains(TEXT(",")) || R.RowName.Contains(TEXT("\"")))
-		Errors.Add(TEXT("Row name must be set and contain no spaces, commas or quotes."));
+		Errors.Add(TEXT("Row name must be set, without spaces, commas or quotes."));
 	if (R.WAName.IsEmpty())
 		Errors.Add(TEXT("Parts name not set."));
 	if (Mesh && !MeshFolder(Mesh).StartsWith(TEXT("/Game/")))
-		Errors.Add(TEXT("The mesh must be in a /Game/ folder (the WA is created next to it)."));
+		Errors.Add(TEXT("The mesh must be under /Game/."));
 	if (R.Slot.IsEmpty() || R.Gender.IsEmpty() || R.FaceType.IsEmpty() || R.Attire.IsEmpty())
-		Errors.Add(TEXT("Slot, gender, face type and attire condition must all be set."));
+		Errors.Add(TEXT("Set slot, gender, face type and attire condition."));
 	if (R.Label.IsEmpty())
 		Warnings.Add(TEXT("Label is empty - the menu will show a blank name."));
 
@@ -247,7 +247,7 @@ void EditPartMaker::Validate(const FEditPartMakerTables& Tables, const FPartRequ
 	const bool bInParts = Tables.Parts->GetRowMap().Contains(Row);
 	const bool bInList = Tables.PartsList && Tables.PartsList->GetRowMap().Contains(Row);
 	if (bInParts && !R.bOverwrite)
-		Errors.Add(FString::Printf(TEXT("Row '%s' already exists in %s - tick 'Update existing' to replace it."), *R.RowName, *Tables.Parts->GetName()));
+		Errors.Add(FString::Printf(TEXT("Row '%s' already exists in %s. Tick 'Update existing' to replace it."), *R.RowName, *Tables.Parts->GetName()));
 	if (bInList && !bInParts)
 		Errors.Add(FString::Printf(TEXT("Row '%s' is a vanilla row in %s - choose another name."), *R.RowName, *Tables.PartsList->GetName()));
 
@@ -272,7 +272,7 @@ void EditPartMaker::Validate(const FEditPartMakerTables& Tables, const FPartRequ
 			const FString OtherGender = ShortEnum(GetAsText(Struct, RowPtr, TEXT("GenderCondition")));
 			if (OtherGender == R.Gender || OtherGender == TEXT("Any") || R.Gender == TEXT("Any"))
 			{
-				Warnings.Add(FString::Printf(TEXT("'%s' is also a %s part with face type %s for %s - the menu may treat them as one entry."),
+				Warnings.Add(FString::Printf(TEXT("'%s' is also a %s part with face type %s for %s; the menu may merge them."),
 					*RowName.ToString(), *WantedSlot, *R.FaceType, *OtherGender));
 			}
 		}
@@ -280,10 +280,10 @@ void EditPartMaker::Validate(const FEditPartMakerTables& Tables, const FPartRequ
 	if (PartsIdUsers.Num() > 0)
 		Errors.Add(FString::Printf(TEXT("PartsID %d is already used by %s."), R.PartsID, *FString::Join(PartsIdUsers, TEXT(", "))));
 	if (UnlockUsers.Num() > 0)
-		Errors.Add(FString::Printf(TEXT("Unlock ID %d is already used by %s - unlock IDs are not shared."), R.UnlockID, *FString::Join(UnlockUsers, TEXT(", "))));
+		Errors.Add(FString::Printf(TEXT("Unlock ID %d is already used by %s."), R.UnlockID, *FString::Join(UnlockUsers, TEXT(", "))));
 
 	if (R.UnlockID < Settings->FirstUnlockID || R.UnlockID > Settings->LastUnlockID)
-		Warnings.Add(FString::Printf(TEXT("Unlock ID %d is outside the custom WrestlerParts range %d-%d."), R.UnlockID, Settings->FirstUnlockID, Settings->LastUnlockID));
+		Warnings.Add(FString::Printf(TEXT("Unlock ID %d is outside the custom range %d-%d."), R.UnlockID, Settings->FirstUnlockID, Settings->LastUnlockID));
 	const FName UnlockRow = UnlockRowName(R.UnlockID);
 	bool bVanillaUnlock = false;
 	ForEachRow({ Tables.BaseUnlock }, [&](const UDataTable*, FName RowName, const uint8* RowPtr, const UScriptStruct* Struct)
@@ -295,22 +295,22 @@ void EditPartMaker::Validate(const FEditPartMakerTables& Tables, const FPartRequ
 		}
 	});
 	if (bVanillaUnlock)
-		Errors.Add(FString::Printf(TEXT("Unlock ID %d belongs to a vanilla unlock row - pick a free ID."), R.UnlockID));
+		Errors.Add(FString::Printf(TEXT("Unlock ID %d is a vanilla unlock row."), R.UnlockID));
 	else if (Tables.Unlock->GetRowMap().Contains(UnlockRow) && !(R.bOverwrite && bInParts))
-		Warnings.Add(FString::Printf(TEXT("%s already exists in %s and no part uses it; it will be replaced."), *UnlockRow.ToString(), *Tables.Unlock->GetName()));
+		Warnings.Add(FString::Printf(TEXT("%s already exists in %s, unused; it will be replaced."), *UnlockRow.ToString(), *Tables.Unlock->GetName()));
 
 	if (Tables.Category)
 	{
 		if (!R.WACategory.IsEmpty() && R.WACategory != TEXT("None") && !Tables.Category->GetRowMap().Contains(FName(*R.WACategory)))
-			Warnings.Add(FString::Printf(TEXT("Parts category '%s' is not a row of %s - it will have no effect."), *R.WACategory, *Tables.Category->GetName()));
+			Warnings.Add(FString::Printf(TEXT("Parts category '%s' isn't a row of %s; no effect."), *R.WACategory, *Tables.Category->GetName()));
 		if (!R.CompatibleCategory.IsEmpty() && R.CompatibleCategory != TEXT("---") && !Tables.Category->GetRowMap().Contains(FName(*R.CompatibleCategory)))
 			Warnings.Add(FString::Printf(TEXT("Compatible category '%s' is not a row of %s."), *R.CompatibleCategory, *Tables.Category->GetName()));
 	}
 	if (R.Slot == TEXT("Suits") && (R.WACategory.IsEmpty() || R.WACategory == TEXT("None")))
-		Warnings.Add(TEXT("Suit with parts category None: the body will not be masked under it."));
+		Warnings.Add(TEXT("Suit with category None: the body won't be masked."));
 
 	if (Tables.PartsList && !GetCompositeParents(Tables.PartsList).Contains(Tables.Parts))
-		Errors.Add(FString::Printf(TEXT("%s is not a parent of %s - the game would never see the row."), *Tables.Parts->GetName(), *Tables.PartsList->GetName()));
+		Errors.Add(FString::Printf(TEXT("%s is not a parent of %s; the game won't see the row."), *Tables.Parts->GetName(), *Tables.PartsList->GetName()));
 	if (Tables.BaseUnlock && !GetCompositeParents(Tables.BaseUnlock).Contains(Tables.Unlock))
 		Warnings.Add(FString::Printf(TEXT("%s is not a parent of %s - the unlock row would be ignored."), *Tables.Unlock->GetName(), *Tables.BaseUnlock->GetName()));
 
@@ -323,13 +323,13 @@ void EditPartMaker::Validate(const FEditPartMakerTables& Tables, const FPartRequ
 		}
 		else if (!Skeleton->GetPathName().StartsWith(TEXT("/Game/GameData/Resources/Models/WrestlerData/")))
 		{
-			Warnings.Add(FString::Printf(TEXT("Mesh uses its own skeleton (%s). That works if its bone names match the game skeleton; the game skeleton is safer."), *Skeleton->GetName()));
+			Warnings.Add(FString::Printf(TEXT("Mesh uses its own skeleton (%s); bone names must match the game's."), *Skeleton->GetName()));
 		}
 	}
 
 	const FString WAPackage = MeshFolder(Mesh) / R.WAName;
 	if (Mesh && !R.WAName.IsEmpty() && FPackageName::DoesPackageExist(WAPackage))
-		Warnings.Add(FString::Printf(TEXT("%s exists - its SkeletalMesh and Category will be updated, other fields kept."), *WAPackage));
+		Warnings.Add(FString::Printf(TEXT("%s exists; its SkeletalMesh and Category will be updated."), *WAPackage));
 }
 
 bool EditPartMaker::MakePart(const FEditPartMakerTables& Tables, const FPartRequest& R, TArray<FString>& Log)
@@ -349,7 +349,7 @@ bool EditPartMaker::MakePart(const FEditPartMakerTables& Tables, const FPartRequ
 	UClass* WAClass = FindWAClass();
 	if (!WAClass)
 	{
-		Log.Add(TEXT("ERROR: class EditWrestlerPartsAsset not found - is the Creation stub module compiled and loaded?"));
+		Log.Add(TEXT("ERROR: EditWrestlerPartsAsset not found. Is the Creation stub module loaded?"));
 		return false;
 	}
 
@@ -399,7 +399,7 @@ bool EditPartMaker::MakePart(const FEditPartMakerTables& Tables, const FPartRequ
 	}
 	else
 	{
-		Log.Add(FString::Printf(TEXT("warning: unlock template row %s not found - using built-in default-unlocked values."), *Settings->UnlockTemplateRow.ToString()));
+		Log.Add(FString::Printf(TEXT("warning: unlock template row %s not found; using defaults."), *Settings->UnlockTemplateRow.ToString()));
 		const FFieldValue Defaults[] = {
 			{ TEXT("RarityStr"), TEXT("1. Common") }, { TEXT("Rarity"), TEXT("Common") }, { TEXT("OptionalSortNo"), TEXT("-1") },
 			{ TEXT("DefaultStockStatus"), TEXT("True") }, { TEXT("InStockTiming"), TEXT("-1") }, { TEXT("CurrencyType"), TEXT("Cash") },
@@ -438,7 +438,7 @@ bool EditPartMaker::MakePart(const FEditPartMakerTables& Tables, const FPartRequ
 		WA = LoadObject<UObject>(nullptr, *WAObjectPath);
 		if (WA && !WA->IsA(WAClass))
 		{
-			Log.Add(FString::Printf(TEXT("ERROR: %s exists but is a %s, not an EditWrestlerPartsAsset."), *WAObjectPath, *WA->GetClass()->GetName()));
+			Log.Add(FString::Printf(TEXT("ERROR: %s is a %s, not an EditWrestlerPartsAsset."), *WAObjectPath, *WA->GetClass()->GetName()));
 			return false;
 		}
 	}
@@ -480,7 +480,7 @@ bool EditPartMaker::MakePart(const FEditPartMakerTables& Tables, const FPartRequ
 		Log.Add(FString::Printf(TEXT("saved %d package(s): WA, tables%s"), Packages.Num(), TEXT(", labels")));
 	}
 
-	Log.Add(FString::Printf(TEXT("Package Project puts the part folder %s in chunk %d and the tables in the table chunks."), *MeshFolder(Mesh), PartChunk));
+	Log.Add(FString::Printf(TEXT("%s goes in chunk %d; tables in the table chunks."), *MeshFolder(Mesh), PartChunk));
 	return true;
 }
 

@@ -104,7 +104,7 @@ namespace AEWPackaging
 				SNew(SVerticalBox)
 				+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 8.f)
 				[
-					SNew(STextBlock).AutoWrapText(true).Text(LOCTEXT("Help", "Ticked labels are cooked and packaged, each into its own pakchunk. Unticked labels are left out of the cook completely (their assets aren't cooked even if something references them). The tables labels hold the arena list, edit part and unlock rows the other mods need."))
+					SNew(STextBlock).AutoWrapText(true).Text(LOCTEXT("Help", "Ticked labels are cooked and packaged. Unticked ones are left out."))
 				]
 				+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, 6.f)
 				[

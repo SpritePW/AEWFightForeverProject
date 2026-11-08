@@ -761,7 +761,7 @@ int32 AcbTableRows::Apply(const FString& CueFolder, const TArray<FPlannedRow>& R
 		const UScriptStruct* Struct = Table->GetRowStruct();
 		if (NewTable->GetRowStruct() != Struct)
 		{
-			OutLog.Add(FString::Printf(TEXT("warning: %s uses a different row struct from %s; row not added."), *NewTable->GetName(), *Table->GetName()));
+			OutLog.Add(FString::Printf(TEXT("warning: %s and %s use different row structs; row not added."), *NewTable->GetName(), *Table->GetName()));
 			continue;
 		}
 		if (!IsWritable(NewTable, OutLog))
@@ -848,7 +848,7 @@ int32 AcbTableRows::Apply(const FString& CueFolder, const TArray<FPlannedRow>& R
 		{
 			if (Used.Contains(WrestlerNumber))
 			{
-				OutLog.Add(FString::Printf(TEXT("%s already has row %lld for that WrestlerID; row not added (set Row name to add it anyway)."), *Plan.TableName, WrestlerNumber));
+				OutLog.Add(FString::Printf(TEXT("%s already has row %lld for that WrestlerID; row not added."), *Plan.TableName, WrestlerNumber));
 				continue;
 			}
 			NewNumber = WrestlerNumber;
@@ -859,7 +859,7 @@ int32 AcbTableRows::Apply(const FString& CueFolder, const TArray<FPlannedRow>& R
 			NewNumber = Allocate(Plan.FirstID, Plan.LastID, Used);
 			if (NewNumber < 0)
 			{
-				OutLog.Add(FString::Printf(TEXT("warning: %s: no free row number between %d and %d; row not added."), *Plan.TableName, Plan.FirstID, Plan.LastID));
+				OutLog.Add(FString::Printf(TEXT("warning: %s: no free row number from %d to %d; row not added."), *Plan.TableName, Plan.FirstID, Plan.LastID));
 				continue;
 			}
 			RowName = FName(*FString::Printf(TEXT("%lld"), NewNumber));
@@ -897,7 +897,7 @@ int32 AcbTableRows::Apply(const FString& CueFolder, const TArray<FPlannedRow>& R
 			const uint8* UnlockTemplate = UnlockTable ? UnlockTable->FindRowUnchecked(Plan.UnlockTemplateRow) : nullptr;
 			if (!UnlockTable || !UnlockNew || !UniqueId || !UnlockTemplate || UnlockNew->GetRowStruct() != UnlockTable->GetRowStruct() || !IsWritable(UnlockNew, OutLog))
 			{
-				OutLog.Add(TEXT("warning: unlock tables not found or don't match (Settings > Tables); the copied unlock ID is kept."));
+				OutLog.Add(TEXT("warning: unlock tables not found or mismatched; unlock ID kept."));
 			}
 			else
 			{
@@ -920,7 +920,7 @@ int32 AcbTableRows::Apply(const FString& CueFolder, const TArray<FPlannedRow>& R
 				}
 				if (NewId < 0)
 				{
-					OutLog.Add(FString::Printf(TEXT("warning: no free unlock ID between %d and %d; the copied unlock ID is kept."), Plan.FirstUnlockID, Plan.LastUnlockID));
+					OutLog.Add(FString::Printf(TEXT("warning: no free unlock ID from %d to %d; unlock ID kept."), Plan.FirstUnlockID, Plan.LastUnlockID));
 				}
 				else
 				{

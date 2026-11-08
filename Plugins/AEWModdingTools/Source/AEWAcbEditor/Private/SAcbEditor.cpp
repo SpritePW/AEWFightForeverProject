@@ -135,8 +135,8 @@ void SAcbEditor::Construct(const FArguments& InArgs)
 						.ToolTipText_Lambda([]()
 						{
 							return GetDefault<UAcbEditorSettings>()->bImportAfterSave
-								? LOCTEXT("SaveImportTip", "Write the .acb (and .awb) to the output folder, then import into the cue sheet folder: cue assets, DataTables and deleted cue assets are updated. (Settings > Import after save)")
-								: LOCTEXT("SaveOnlyTip", "Write the .acb (and .awb) to the output folder. Import after save is off in Settings, so nothing in the project changes.");
+								? LOCTEXT("SaveImportTip", "Write the .acb/.awb, then import into the cue sheet folder.")
+								: LOCTEXT("SaveOnlyTip", "Write the .acb/.awb only (Import after save is off).");
 						})
 						.ButtonStyle(&FEditorStyle::Get(), "FlatButton.Success")
 						.ForegroundColor(FLinearColor::White)
@@ -146,7 +146,7 @@ void SAcbEditor::Construct(const FArguments& InArgs)
 					+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
 					[
 						SNew(STextBlock)
-						.ToolTipText(LOCTEXT("ImportFolderTip", "Where Save imports the cue sheet. Also set by right-clicking a Content Browser folder."))
+						.ToolTipText(LOCTEXT("ImportFolderTip", "Where Save imports. Also set by right-clicking a Content Browser folder."))
 						.ColorAndOpacity_Lambda([this]() { return ImportFolder.IsEmpty() ? FSlateColor::UseSubduedForeground() : FSlateColor::UseForeground(); })
 						.Text_Lambda([this]()
 						{
@@ -309,7 +309,7 @@ void SAcbEditor::Construct(const FArguments& InArgs)
 										+ SHorizontalBox::Slot().AutoWidth().Padding(4, 0, 0, 0)
 										[
 											SNew(SButton).Text(LOCTEXT("SetCategory", "Set"))
-											.ToolTipText(LOCTEXT("SetCategoryTip", "Give the selected cues this category. Their other sound settings stay."))
+											.ToolTipText(LOCTEXT("SetCategoryTip", "Set this category on the selected cues."))
 											.IsEnabled_Lambda(HasSelection)
 											.OnClicked_Lambda([this]() { SetCategoryOfSelected(); return FReply::Handled(); })
 										])
@@ -317,7 +317,7 @@ void SAcbEditor::Construct(const FArguments& InArgs)
 								+ SVerticalBox::Slot().AutoHeight()
 								[
 									MakeRow(LOCTEXT("CueVolume", "Volume"), MakeVolumeSlider(false),
-										LOCTEXT("CueVolumeRowTip", "Volume multiplier for the whole cue, on top of each track's volume (1.0 = unchanged, 2.0 = double). Drag, or double-click to type; it is set when you let go. Vanilla cues use up to about 3.2; the game clamps the final output, so very high values can distort. x removes it."))
+										LOCTEXT("CueVolumeRowTip", "Whole-cue volume multiplier (1.0 = unchanged). Drag or double-click to type. x removes it."))
 								])
 						]
 
@@ -376,7 +376,7 @@ void SAcbEditor::Construct(const FArguments& InArgs)
 								+ SVerticalBox::Slot().AutoHeight()
 								[
 									MakeRow(LOCTEXT("SlotVolume", "Volume"), MakeVolumeSlider(true),
-										LOCTEXT("SlotVolumeRowTip", "Volume multiplier for the chosen track, this cue only (1.0 = unchanged). Drag, or double-click to type; it is set when you let go. Vanilla music tracks sit at 0.25-0.56, so raising a quiet track toward 1.0 boosts it. x removes it."))
+										LOCTEXT("SlotVolumeRowTip", "This track's volume multiplier in this cue (1.0 = unchanged). x removes it."))
 								])
 						]
 
@@ -387,7 +387,7 @@ void SAcbEditor::Construct(const FArguments& InArgs)
 								+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 2)
 								[
 									SNew(SAcbTimeline)
-									.ToolTipText(LOCTEXT("TimelineTip", "Click or drag to play from a point. Drag S to move the start point, [ and ] to move the loop start and end (Loop must be on). Moved markers fill the fields below; Apply (or Play) sets them."))
+									.ToolTipText(LOCTEXT("TimelineTip", "Click or drag to play from a point. Drag S, [ and ] to move the start and loop points."))
 									.IsEnabled_Lambda([this]() { return CachedTiming.bValid; })
 									.NumFrames_Lambda([this]() { return CachedTiming.bValid ? CachedTiming.NumSamples : int64(0); })
 									.SampleRate_Lambda([this]() { return CachedTiming.SamplingRate; })
@@ -407,7 +407,7 @@ void SAcbEditor::Construct(const FArguments& InArgs)
 									+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 4, 0)
 									[
 										SNew(SButton).Text(LOCTEXT("PreviewPlay", "Play"))
-										.ToolTipText(LOCTEXT("PreviewPlayTip", "Play the chosen track from the cue's start point, looping as the cue does, through Unreal's audio (decoded with VGAudioCli). Typed or dragged start/loop values are applied first."))
+										.ToolTipText(LOCTEXT("PreviewPlayTip", "Play the track from the start point, looping like the cue."))
 										.IsEnabled_Lambda(HasSelection)
 										.OnClicked_Lambda([this]() { PreviewCue(false); return FReply::Handled(); })
 									]
@@ -427,7 +427,7 @@ void SAcbEditor::Construct(const FArguments& InArgs)
 									+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)
 									[
 										SNew(SButton).Text(LOCTEXT("PreviewLoop", "Play loop end"))
-										.ToolTipText(LOCTEXT("PreviewLoopTip", "Start 4 s before the loop end, to hear the jump back to the loop start."))
+										.ToolTipText(LOCTEXT("PreviewLoopTip", "Play from 4 s before the loop end to hear the loop."))
 										.IsEnabled_Lambda([this, HasSelection]() { return HasSelection() && bTimingLoop; })
 										.OnClicked_Lambda([this]() { PreviewCue(true); return FReply::Handled(); })
 									]
@@ -458,7 +458,7 @@ void SAcbEditor::Construct(const FArguments& InArgs)
 											.IsEnabled_Lambda([this]() { return GetTimelinePosition() >= 0; })
 											.OnClicked_Lambda([this]() { SetTimingMarker(EAcbTimelineMarker::LoopEnd, GetTimelinePosition()); return FReply::Handled(); })
 										],
-										LOCTEXT("SetHereTip", "While the track plays (or is paused), put the start point or a loop point where the playhead is. Apply sets them."))
+										LOCTEXT("SetHereTip", "Move the start or a loop point to the playhead."))
 								]
 								+ SVerticalBox::Slot().AutoHeight()
 								[
@@ -517,7 +517,7 @@ void SAcbEditor::Construct(const FArguments& InArgs)
 										FString Line = FString::Printf(TEXT("Audio %.3fs = %lld samples at %d Hz."), T.SamplingRate ? double(T.NumSamples) / T.SamplingRate : 0.0,
 											T.NumSamples, T.SamplingRate);
 										if (!T.bCanSetStart) Line += TEXT(" No track, so no start point.");
-										if (T.SharedBy > 1) Line += FString::Printf(TEXT(" Shared by %d cues; a new loop region gives this cue its own copy."), T.SharedBy);
+										if (T.SharedBy > 1) Line += FString::Printf(TEXT(" Shared by %d cues; a new loop gives this cue its own copy."), T.SharedBy);
 										if (T.bWaveformLoops && !T.bLoop) Line += TEXT(" Loop points off for this cue.");
 										return FText::FromString(Line);
 									})
@@ -585,7 +585,7 @@ void SAcbEditor::Construct(const FArguments& InArgs)
 												ApplyPreset(PresetOptions.IndexOfByKey(V));
 											}
 										}),
-										LOCTEXT("PresetTip", "Fills the rows below. Any row's name, category and copy from can then be changed. Every cue plays the same audio."))
+										LOCTEXT("PresetTip", "Fills the rows below. Every cue plays the same audio."))
 								]
 								+ SVerticalBox::Slot().AutoHeight().Padding(0, 2)
 								[
@@ -636,7 +636,7 @@ void SAcbEditor::Construct(const FArguments& InArgs)
 											+ SHorizontalBox::Slot().AutoWidth()
 											[
 												SNew(SButton).Text(LOCTEXT("ResetCueRows", "Reset"))
-												.ToolTipText(LOCTEXT("ResetCueRowsTip", "Undo your changes to the rows (back to the preset)."))
+												.ToolTipText(LOCTEXT("ResetCueRowsTip", "Reset the rows to the preset."))
 												.OnClicked_Lambda([this]() { ApplyPreset(CurrentPreset); return FReply::Handled(); })
 											]
 										]
@@ -673,7 +673,7 @@ void SAcbEditor::Construct(const FArguments& InArgs)
 											.IsEnabled_Lambda(IsOpen)
 											.OnClicked_Lambda([this]() { FindTableRows(); return FReply::Handled(); })
 										],
-										LOCTEXT("TableRowsTip", "Rows in the Cue Tables (Settings > Tables) that use the copy-from cues. On Save each is copied into its New Table with the new cues."))
+										LOCTEXT("TableRowsTip", "Table rows using the copy-from cues. Save copies each into its New Table."))
 								]
 								+ SVerticalBox::Slot().AutoHeight()
 								[
@@ -727,7 +727,7 @@ void SAcbEditor::Construct(const FArguments& InArgs)
 								+ SVerticalBox::Slot().AutoHeight().Padding(0, 2, 0, 0).HAlign(HAlign_Right)
 								[
 									SNew(SButton).Text(LOCTEXT("PointAtSource", "Apply to selected"))
-									.ToolTipText(LOCTEXT("PointAtSourceTip", "Selected cues play the source's audio, keeping their own settings."))
+									.ToolTipText(LOCTEXT("PointAtSourceTip", "Selected cues play the source's audio, keeping their settings."))
 									.IsEnabled_Lambda(HasSelection)
 									.OnClicked_Lambda([this]() { PointSelectedAtSource(); return FReply::Handled(); })
 								],
@@ -741,7 +741,7 @@ void SAcbEditor::Construct(const FArguments& InArgs)
 								+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
 								[
 									SNew(STextBlock).AutoWrapText(true).ColorAndOpacity(FSlateColor::UseSubduedForeground())
-									.Text(LOCTEXT("AwbHelp", "Saves in the same layout as opened. Merging puts all audio in the .acb."))
+									.Text(LOCTEXT("AwbHelp", "Saves in the opened layout. Merging puts all audio in the .acb."))
 								]
 								+ SHorizontalBox::Slot().AutoWidth().Padding(8, 0, 0, 0).VAlign(VAlign_Center)
 								[
@@ -924,7 +924,7 @@ void SAcbEditor::RebuildCueRows()
 			[
 				SNew(SEditableTextBox)
 				.HintText(LOCTEXT("PatternHint", "cue name (empty = file name)"))
-				.ToolTipText(LOCTEXT("PatternTip", "Cue name, e.g. mus_ent_AdamPage. Empty or ending in _ adds the audio file name."))
+				.ToolTipText(LOCTEXT("PatternTip", "Cue name. Empty or ending in _ adds the file name."))
 				.Text_Lambda([Template]() { return FText::FromString(Template->Pattern); })
 				.OnTextChanged_Lambda([Template](const FText& T) { Template->Pattern = T.ToString(); })
 			]
@@ -1020,7 +1020,7 @@ void SAcbEditor::RebuildTableRows()
 				.HintText(LOCTEXT("TableRowNameHint", "automatic"))
 				.Text_Lambda([Candidate]() { return FText::FromString(Candidate->RowName); })
 				.OnTextChanged_Lambda([Candidate](const FText& T) { Candidate->RowName = T.ToString(); }),
-				LOCTEXT("TableRowNameTip", "Empty = the next free number in the table's ID range, or the copied row's name with the new name in it."))
+				LOCTEXT("TableRowNameTip", "Empty = next free ID, or the copied row's name with the new name."))
 		];
 		for (const AcbTableRows::FFieldInfo& Field : Candidate->Fields)
 		{
@@ -1036,7 +1036,7 @@ void SAcbEditor::RebuildTableRows()
 						return FText::FromString(Value ? *Value : FString());
 					})
 					.OnTextChanged_Lambda([Candidate, Key](const FText& T) { Candidate->Values.Add(Key, T.ToString()); }),
-					LOCTEXT("TableFieldTip", "Empty = the copied value with the template's name part swapped for the new one (texts with no name part get the new name)."))
+					LOCTEXT("TableFieldTip", "Empty = the copied value with the new name swapped in."))
 			];
 		}
 		if (!Candidate->UnlockTemplateRow.IsNone())
@@ -1053,7 +1053,7 @@ void SAcbEditor::RebuildTableRows()
 							? FText::Format(LOCTEXT("TableUnlockLabel", "Add one (copy of {0}) into {1}"), FText::FromName(Candidate->UnlockTemplateRow), FText::FromString(Candidate->UnlockNewTable.GetAssetName()))
 							: FText::Format(LOCTEXT("TableUnlockNone", "Shares {0} (no Unlock New Table set)"), FText::FromName(Candidate->UnlockTemplateRow)))
 					],
-					LOCTEXT("TableUnlockTip", "Copy the template row's unlock item into the Cue Table's Unlock New Table (Settings > Tables) with a free unlock ID. Off = the new row shares the template's unlock item."))
+					LOCTEXT("TableUnlockTip", "Give the row its own unlock item. Off = share the template's."))
 			];
 		}
 
@@ -1081,7 +1081,7 @@ void SAcbEditor::RebuildTableRows()
 					.Visibility(Candidate->CoveredCueFields < Candidate->CueFields ? EVisibility::Visible : EVisibility::Collapsed)
 					.AutoWrapText(true)
 					.ColorAndOpacity(FSlateColor::UseSubduedForeground())
-					.Text(FText::Format(LOCTEXT("TablePartial", "The row uses {0} cues and this add replaces {1}. The others switch to the new name's cues if they exist, else stay empty."),
+					.Text(FText::Format(LOCTEXT("TablePartial", "The row uses {0} cues; this replaces {1}. The rest use the new name's cues if found, else empty."),
 						FText::AsNumber(Candidate->CueFields), FText::AsNumber(Candidate->CoveredCueFields)))
 				]
 				+ SVerticalBox::Slot().AutoHeight().Padding(0, 2, 0, 0)
@@ -1162,8 +1162,7 @@ void SAcbEditor::OpenFile(const FString& AcbPath, const FString& AwbPath, const 
 	if (Awb.IsEmpty() && Session.Doc().UsesStreamingAwb())
 	{
 		if (FMessageDialog::Open(EAppMsgType::YesNo, LOCTEXT("PickAwb",
-			"This ACB streams audio from an .awb, but none was found next to it. Pick the .awb now?\n\n"
-			"Without it you can still edit cues and add audio embedded in the ACB, but not merge or add streaming audio.")) == EAppReturnType::Yes)
+			"No .awb found next to this streaming ACB. Pick it now?\n\nWithout it you can't merge or add streaming audio.")) == EAppReturnType::Yes)
 		{
 			TArray<FString> Files;
 			if (PickFiles(TEXT("Streaming AWB"), TEXT("AWB (*.awb)|*.awb"), false, FPaths::GetPath(AcbPath), Files) && Files.Num() > 0)
@@ -1218,7 +1217,7 @@ void SAcbEditor::OpenSettings()
 void SAcbEditor::OpenForImportFolder(const FString& ContentFolder)
 {
 	if (Session.IsOpen() && FMessageDialog::Open(EAppMsgType::YesNo, FText::Format(LOCTEXT("UseOpenSheet",
-		"Import the open cue sheet ({0}) into {1}?\n\nNo: open another .acb to import there."),
+		"Import the open cue sheet ({0}) into {1}?\n\nNo: open another .acb."),
 		FText::FromString(Session.GetCueSheetName()), FText::FromString(ContentFolder))) == EAppReturnType::Yes)
 	{
 		SetImportFolder(ContentFolder);
@@ -1284,8 +1283,7 @@ void SAcbEditor::OnSaveClicked(bool bImport)
 	if (bImport && Estimate > FAcbEditorSession::CriImportLimit)
 	{
 		const FText Message = FText::Format(LOCTEXT("TooBig",
-			"The saved .acb will be about {0} GiB, but the CriWare importer can only read files under 2 GiB.\n\n"
-			"Save without importing?"),
+			"The .acb will be about {0} GiB; the CriWare importer needs under 2 GiB.\n\nSave without importing?"),
 			FText::AsNumber(double(Estimate) / double(1ull << 30)));
 		if (FMessageDialog::Open(EAppMsgType::YesNo, Message) != EAppReturnType::Yes)
 		{
@@ -1320,8 +1318,8 @@ void SAcbEditor::OnSaveClicked(bool bImport)
 	AddLog(TEXT("Saved ") + Result.AcbPath + (Result.AwbPath.IsEmpty() ? FString() : TEXT(" + ") + Result.AwbPath));
 	if (bStreamsWithoutAwb)
 	{
-		AddLog(TEXT("warning: this cue sheet streams from an .awb that wasn't opened, so none was written or copied. ")
-			TEXT("Open it together with its .awb (same name, same folder) to save and import the pair."));
+		AddLog(TEXT("warning: the .awb wasn't opened, so none was written. ")
+			TEXT("Open the .acb with its .awb to save both."));
 	}
 	Refresh();
 
@@ -1767,7 +1765,7 @@ void SAcbEditor::DeleteSelected()
 		return;
 	}
 	const FText Message = FText::Format(LOCTEXT("ConfirmDelete",
-		"Delete {0} cue(s)? Audio no other cue uses is removed on save (Remove unused audio). When you Save, their cue assets are deleted, and DataTable rows left with no cues are removed."), Selection.Num());
+		"Delete {0} cue(s)? On save, their assets, unused audio and empty rows are removed."), Selection.Num());
 	if (FMessageDialog::Open(EAppMsgType::YesNo, Message) != EAppReturnType::Yes)
 	{
 		return;
@@ -2153,7 +2151,7 @@ void SAcbEditor::PreviewCue(bool bNearLoopEnd, int64 FromFrame)
 	{
 		if (!T.bLoop || !T.bWaveformLoops)
 		{
-			AddLog(TEXT("ERROR: this track doesn't loop, so there is no loop end to hear."));
+			AddLog(TEXT("ERROR: this track doesn't loop."));
 			return;
 		}
 		StartFrame = FMath::Max<int64>(0, T.LoopEnd - 4 * Rate);

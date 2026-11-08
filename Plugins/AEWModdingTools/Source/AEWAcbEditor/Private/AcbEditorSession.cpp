@@ -335,7 +335,7 @@ bool FAcbEditorSession::DecodeSlotAudio(int32 CueIndex, int32 Slot, FString& Out
 	const FString Exe = GetVGAudioCli();
 	if (Exe.IsEmpty())
 	{
-		OutError = TEXT("Preview needs VGAudioCli.exe (the plugin's ThirdParty/VGAudio folder, or set its path in the settings).");
+		OutError = TEXT("Preview needs VGAudioCli.exe (see settings).");
 		return false;
 	}
 	FString AudioFile;
@@ -346,7 +346,7 @@ bool FAcbEditorSession::DecodeSlotAudio(int32 CueIndex, int32 Slot, FString& Out
 		const TCHAR* Extension = Info.Encode == 0 ? TEXT("adx") : (Info.Encode == 2 || Info.Encode == 6) ? TEXT("hca") : nullptr;
 		if (!Extension)
 		{
-			OutError = FString::Printf(TEXT("Preview can't decode this audio (encode type %d; only HCA and ADX)."), int32(Info.Encode));
+			OutError = FString::Printf(TEXT("Can't preview encode type %d (HCA and ADX only)."), int32(Info.Encode));
 			return false;
 		}
 		const AcbCore::Afs2Archive* Archive = Info.Streaming != 0 && Document->StreamAwb() ? Document->StreamAwb() : Document->MemoryAwb();
@@ -411,7 +411,7 @@ bool FAcbEditorSession::PrepareAudio(const FString& InPath, FString& OutPath, FS
 	const FString Exe = GetVGAudioCli();
 	if (Exe.IsEmpty())
 	{
-		OutError = TEXT("WAV files need VGAudioCli.exe (shipped in the plugin's ThirdParty/VGAudio folder, or set its path in the settings) -- or add an .hca instead.");
+		OutError = TEXT("WAV files need VGAudioCli.exe (see settings), or add an .hca.");
 		return false;
 	}
 	const FString CacheDir = FPaths::Combine(Settings->GetOutputDirectory(), TEXT("hca_cache"));
@@ -703,7 +703,7 @@ bool FAcbEditorSession::SetSlotTiming(int32 CueIndex, int32 Slot, TOptional<int6
 	if ((StartMs.IsSet() && (StartMs.GetValue() < 0 || StartMs.GetValue() > int64(MAX_uint32)))
 		|| (bLoop && (LoopStart < 0 || LoopEnd < 0 || LoopStart > int64(MAX_uint32) || LoopEnd > int64(MAX_uint32))))
 	{
-		OutMessage = TEXT("Start and loop points must be positive and inside the audio.");
+		OutMessage = TEXT("Start and loop points must be inside the audio.");
 		return false;
 	}
 	const std::optional<uint32_t> Start = StartMs.IsSet() ? std::optional<uint32_t>(uint32_t(StartMs.GetValue())) : std::nullopt;
@@ -771,7 +771,7 @@ FAcbSaveResult FAcbEditorSession::Save(const UAcbEditorSettings& Settings)
 				}
 				else if (Removed.Any())
 				{
-					Result.Cleanup = FString::Printf(TEXT("Removed unused data: %llu sequence(s), %llu track(s), %llu event(s), %llu synth(s), %llu waveform(s), %llu audio file(s) (%.1f MB)."),
+					Result.Cleanup = FString::Printf(TEXT("Removed unused: %llu sequences, %llu tracks, %llu events, %llu synths, %llu waveforms, %llu files (%.1f MB)."),
 						uint64(Removed.Sequences), uint64(Removed.Tracks), uint64(Removed.Events), uint64(Removed.Synths), uint64(Removed.Waveforms),
 						uint64(Removed.MemoryAudio + Removed.StreamAudio), double(Removed.AudioBytes) / (1024.0 * 1024.0));
 				}

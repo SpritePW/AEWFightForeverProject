@@ -167,7 +167,7 @@ namespace AEWPackaging
 		const FString Project = FPaths::ConvertRelativePathToFull(FPaths::GetProjectFilePath());
 		if (!FirstLine.Contains(TEXT("BuildCookRun")) || !FirstLine.Contains(Project, ESearchCase::IgnoreCase))
 		{
-			Log.Add(TEXT("The last packaging run was not Package Project for this project."));
+			Log.Add(TEXT("The last packaging run wasn't for this project."));
 			return -1;
 		}
 		FString StageDir = ValueAfter(Text, TEXT("BaseStageDirectory="));

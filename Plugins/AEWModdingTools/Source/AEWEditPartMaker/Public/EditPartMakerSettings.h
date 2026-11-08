@@ -14,16 +14,16 @@ public:
 
 	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
 
-	UPROPERTY(EditAnywhere, config, Category = "Tables", meta = (AllowedClasses = "DataTable", DisplayName = "Parts Table", ToolTip = "New part rows are written here. Must be a parent of the Parts List Table."))
+	UPROPERTY(EditAnywhere, config, Category = "Tables", meta = (AllowedClasses = "DataTable", DisplayName = "Parts Table", ToolTip = "New part rows go here. Must be a parent of Parts List Table."))
 	FSoftObjectPath PartsTable;
 
-	UPROPERTY(EditAnywhere, config, Category = "Tables", meta = (AllowedClasses = "DataTable", DisplayName = "Parts List Table", ToolTip = "The composite table the game reads. Used to find used IDs."))
+	UPROPERTY(EditAnywhere, config, Category = "Tables", meta = (AllowedClasses = "DataTable", DisplayName = "Parts List Table", ToolTip = "Composite table the game reads."))
 	FSoftObjectPath PartsListTable;
 
-	UPROPERTY(EditAnywhere, config, Category = "Tables", meta = (AllowedClasses = "DataTable", DisplayName = "Unlock Table", ToolTip = "New unlock rows are written here. Must be a parent of the Base Unlock Table."))
+	UPROPERTY(EditAnywhere, config, Category = "Tables", meta = (AllowedClasses = "DataTable", DisplayName = "Unlock Table", ToolTip = "New unlock rows go here. Must be a parent of Base Unlock Table."))
 	FSoftObjectPath UnlockTable;
 
-	UPROPERTY(EditAnywhere, config, Category = "Tables", meta = (AllowedClasses = "DataTable", DisplayName = "Base Unlock Table", ToolTip = "The composite unlock table the game reads. Used to find used unlock IDs and the template row."))
+	UPROPERTY(EditAnywhere, config, Category = "Tables", meta = (AllowedClasses = "DataTable", DisplayName = "Base Unlock Table", ToolTip = "Composite unlock table the game reads."))
 	FSoftObjectPath BaseUnlockTable;
 
 	UPROPERTY(EditAnywhere, config, Category = "Tables", meta = (AllowedClasses = "DataTable", DisplayName = "Category Table", ToolTip = "Categories offered for the WA."))
@@ -44,6 +44,6 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Defaults", meta = (AllowedClasses = "Texture2D"))
 	FSoftObjectPath DefaultThumbnail;
 
-	UPROPERTY(EditAnywhere, config, Category = "Defaults", meta = (DisplayName = "Save Changes Automatically", ToolTip = "Save the parts asset and both tables as soon as a part is made. Turn off to review the changes and save them yourself."))
+	UPROPERTY(EditAnywhere, config, Category = "Defaults", meta = (DisplayName = "Save Changes Automatically", ToolTip = "Save the asset and tables when a part is made."))
 	bool bSaveChangesAutomatically = true;
 };

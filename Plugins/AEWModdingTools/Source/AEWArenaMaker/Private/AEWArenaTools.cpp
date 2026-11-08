@@ -351,17 +351,17 @@ namespace
 		UDataTable* NewRows = LoadSetting<UDataTable>(S->ArenaNewTable);
 		if (!Table || !Table->RowStruct)
 		{
-			UE_LOG(LogAEWArena, Error, TEXT("Arena Table not found: %s (Project Settings > Plugins > Arena Maker)"), *S->ArenaTable.ToString());
+			UE_LOG(LogAEWArena, Error, TEXT("Arena Table not found: %s"), *S->ArenaTable.ToString());
 			return false;
 		}
 		if (!NewRows || NewRows->RowStruct != Table->RowStruct || Cast<UCompositeDataTable>(NewRows))
 		{
-			UE_LOG(LogAEWArena, Error, TEXT("New Arena Rows Table not found, not a plain table, or with a different row struct: %s"), *S->ArenaNewTable.ToString());
+			UE_LOG(LogAEWArena, Error, TEXT("New Arena Rows Table not found or invalid: %s"), *S->ArenaNewTable.ToString());
 			return false;
 		}
 		if (Table != NewRows && !ParentsOf(Table).Contains(NewRows))
 		{
-			UE_LOG(LogAEWArena, Warning, TEXT("%s is not a parent of %s - the game won't see the new arena rows"), *NewRows->GetName(), *Table->GetName());
+			UE_LOG(LogAEWArena, Warning, TEXT("%s is not a parent of %s; the game won't see new arena rows"), *NewRows->GetName(), *Table->GetName());
 		}
 		OutTable = Table;
 		OutNewRows = NewRows;
@@ -425,7 +425,7 @@ namespace
 		}
 		if (BaseUnlock && BaseUnlock != Unlock && Cast<UCompositeDataTable>(BaseUnlock) && !ParentsOf(BaseUnlock).Contains(Unlock))
 		{
-			UE_LOG(LogAEWArena, Warning, TEXT("%s is not a parent of %s - the game won't see the unlock row"), *Unlock->GetName(), *BaseUnlock->GetName());
+			UE_LOG(LogAEWArena, Warning, TEXT("%s is not a parent of %s; the game won't see the unlock row"), *Unlock->GetName(), *BaseUnlock->GetName());
 		}
 
 		const UScriptStruct* RS = Unlock->GetRowStruct();
@@ -466,7 +466,7 @@ namespace
 		}
 		else
 		{
-			UE_LOG(LogAEWArena, Warning, TEXT("no unlock template row found - the new unlock row starts empty"));
+			UE_LOG(LogAEWArena, Warning, TEXT("no unlock template row; the new unlock row starts empty"));
 		}
 		SetIntField(RS, Row, TEXT("UniqueID"), Id);
 		SetByText(RS, Row, TEXT("UnlockCategory"), TEXT("Arena"));
@@ -786,7 +786,7 @@ namespace
 		const FString Path = ToLevelPath(Level);
 		if (Path.IsEmpty())
 		{
-			UE_LOG(LogAEWArena, Warning, TEXT("map %s not found - LevelName keeps the short name, which the game can't find for a mod map"), *Level);
+			UE_LOG(LogAEWArena, Warning, TEXT("map %s not found; LevelName keeps the short name"), *Level);
 			return Level;
 		}
 		return Path;
@@ -850,7 +850,7 @@ int32 UAEWArenaTools::RegisterArena(const FString& LevelName, const FString& Cop
 	UUserDefinedEnum* Enum = LoadSetting<UUserDefinedEnum>(S->ArenaEnum);
 	if (!Enum)
 	{
-		UE_LOG(LogAEWArena, Error, TEXT("Arena ID Enum not found: %s (Project Settings > Plugins > Arena Maker)"), *S->ArenaEnum.ToString());
+		UE_LOG(LogAEWArena, Error, TEXT("Arena ID Enum not found: %s"), *S->ArenaEnum.ToString());
 		return -1;
 	}
 	UDataTable* Table = nullptr;
@@ -976,7 +976,7 @@ int32 UAEWArenaTools::RegisterArena(const FString& LevelName, const FString& Cop
 	}
 	RemoveStrayUexp(Enum->GetOutermost());
 
-	UE_LOG(LogAEWArena, Log, TEXT("registered %s as %s: row %s in %s (copied from row %s), unlock ID %lld"),
+	UE_LOG(LogAEWArena, Log, TEXT("registered %s as %s: row %s in %s (from %s), unlock ID %lld"),
 		*Stored, *FullEntry.ToString(), *RowName.ToString(), *NewRows->GetName(), *SrcRowName.ToString(), UnlockId);
 	return (int32)NewValue;
 }
@@ -1062,7 +1062,7 @@ FString UAEWArenaTools::CreateArenaFromTemplate(const FString& TemplateMap, cons
 		{
 			if (W.AssetName.ToString().Equals(NewName, ESearchCase::IgnoreCase))
 			{
-				UE_LOG(LogAEWArena, Error, TEXT("a map named %s already exists (%s) - the game finds arena maps by name only"), *NewName, *W.PackageName.ToString());
+				UE_LOG(LogAEWArena, Error, TEXT("a map named %s already exists (%s); arena maps must have unique names"), *NewName, *W.PackageName.ToString());
 				return FString();
 			}
 		}
@@ -1131,7 +1131,7 @@ FString UAEWArenaTools::CreateArenaFromTemplate(const FString& TemplateMap, cons
 		}
 		if (Shared.Contains(R.Key) && CountActors(Src) <= 2)
 		{
-			UE_LOG(LogAEWArena, Warning, TEXT("shared sublevel %s is an empty proxy - kept shared (run the template importer again to fill it, then reopen the arena)"), *R.Key);
+			UE_LOG(LogAEWArena, Warning, TEXT("shared sublevel %s is an empty proxy; kept shared"), *R.Key);
 			KeptShared.Add(R.Key);
 			continue;
 		}
@@ -1308,7 +1308,7 @@ FString UAEWArenaTools::CreateArenaFromTemplate(const FString& TemplateMap, cons
 		const int32 Registered = RegisterArena(NewPkg, CopyFrom, DisplayName.IsEmpty() ? StripNumber(NewName) : DisplayName, Parent, ChunkId, Id);
 		if (Registered < 0)
 		{
-			UE_LOG(LogAEWArena, Error, TEXT("the maps were created, but the arena could not be added to the arena list"));
+			UE_LOG(LogAEWArena, Error, TEXT("maps created, but the arena couldn't be added to the arena list"));
 		}
 	}
 
@@ -1338,7 +1338,7 @@ FString UAEWArenaTools::CreateArenaFromTemplate(const FString& TemplateMap, cons
 			UEditorLoadingAndSavingUtils::NewBlankMap(false);
 		}
 	}
-	UE_LOG(LogAEWArena, Log, TEXT("done: %s. Next: check the Level Blueprint, mark the lighting scenarios, build lighting."), *NewPkg);
+	UE_LOG(LogAEWArena, Log, TEXT("done: %s. Next: check the Level Blueprint and build lighting."), *NewPkg);
 	return NewPkg;
 }
 
@@ -1686,7 +1686,7 @@ namespace
 		UDataTable* NewRows = nullptr;
 		if (!Enum || !PrepareArenaTables(Table, NewRows))
 		{
-			UE_LOG(LogAEWArena, Error, TEXT("arena enum or tables not found (Project Settings > Plugins > Arena Maker)"));
+			UE_LOG(LogAEWArena, Error, TEXT("arena enum or tables not found (see Arena Maker settings)"));
 			return -1;
 		}
 		TGuardValue<bool> Busy(GArenaBusy, true);
@@ -2039,8 +2039,8 @@ int32 UAEWArenaTools::SyncArenaList(bool bRenumber, bool bAsk)
 	if (bAsk)
 	{
 		const FString Message = Rows.Num() > 0
-			? FString::Printf(TEXT("These mod arenas have no map any more and will be removed from the arena table, the enum and the unlock table:%s%s"),
-				*List, bRenumber ? TEXT("\n\nThe remaining mod arenas are then renumbered without gaps.") : TEXT(""))
+			? FString::Printf(TEXT("These mod arenas have no map and will be removed:%s%s"),
+				*List, bRenumber ? TEXT("\n\nThe rest are then renumbered.") : TEXT(""))
 			: FString(TEXT("Every mod arena still has its map.")) + (bRenumber ? TEXT("\n\nRenumber the mod arenas to close any gaps in their IDs?") : TEXT(""));
 		if (Rows.Num() == 0 && !bRenumber)
 		{
@@ -2061,7 +2061,7 @@ bool UAEWArenaTools::UnregisterArena(int32 ArenaId, bool bRenumber)
 	const FName Row(*LexToString(ArenaId));
 	if (!NewRows || !NewRows->GetRowMap().Contains(Row))
 	{
-		UE_LOG(LogAEWArena, Error, TEXT("arena %d is not in the New Arena Rows Table - only mod arenas can be removed"), ArenaId);
+		UE_LOG(LogAEWArena, Error, TEXT("arena %d isn't a mod arena; it can't be removed"), ArenaId);
 		return false;
 	}
 	return ApplyArenaChanges({ Row }, bRenumber) > 0;
@@ -2413,7 +2413,7 @@ int32 UAEWArenaTools::MakeBarricadeFromSelected()
 		}
 		if (A->Tags.ContainsByPredicate([](const FName& T) { return T.ToString().StartsWith(BarricadeGroupPrefix); }))
 		{
-			UE_LOG(LogAEWArena, Warning, TEXT("%s is already a barricade - run Restore Meshes From Barricades first to remake it"), *A->GetActorLabel());
+			UE_LOG(LogAEWArena, Warning, TEXT("%s is already a barricade. Restore it first to remake it"), *A->GetActorLabel());
 			continue;
 		}
 		TInlineComponentArray<UStaticMeshComponent*> Meshes(A);
@@ -2424,7 +2424,7 @@ int32 UAEWArenaTools::MakeBarricadeFromSelected()
 	}
 	if (Sources.Num() == 0)
 	{
-		FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("MakeBarricadeNone", "Select one or more mesh actors (e.g. FamilyMart_FM_board) in the level first."), &Title);
+		FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("MakeBarricadeNone", "Select one or more mesh actors first."), &Title);
 		return 0;
 	}
 
@@ -2432,7 +2432,7 @@ int32 UAEWArenaTools::MakeBarricadeFromSelected()
 	UClass* PieceClass = LoadBarricadePieceClass(Tried);
 	if (!PieceClass)
 	{
-		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("No barricade class could be loaded. Set Barricade Class (Project Settings > Arena Maker) to a barricade blueprint in the project. Tried:\n  ") + FString::Join(Tried, TEXT("\n  "))), &Title);
+		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("No barricade class loaded. Set Barricade Class in Arena Maker settings. Tried:\n  ") + FString::Join(Tried, TEXT("\n  "))), &Title);
 		return 0;
 	}
 	if (Tried.Num() > 1)
@@ -2595,20 +2595,20 @@ int32 UAEWArenaTools::MakeBarricadeFromSelected()
 		const bool bGuarded = SpawnBarricadeSettings(World, Level, PieceClass, Pieces, { Source }, Group, Label, Source->GetFolderPath(), PieceTransform, false) != nullptr;
 		if (!bGuarded)
 		{
-			UE_LOG(LogAEWArena, Warning, TEXT("%s: could not add the barricade settings actor - knock-down settings won't apply"), *Source->GetActorLabel());
+			UE_LOG(LogAEWArena, Warning, TEXT("%s: couldn't add the barricade settings actor"), *Source->GetActorLabel());
 		}
 
 		Source->Modify();
 		Source->Tags.AddUnique(Group);
 		++Made;
 		Report.Add(FString::Printf(TEXT("%s -> %d x %s (%s)%s"), *Source->GetActorLabel(), Filled, *PieceClass->GetName(), *Label,
-			bNoCollision ? TEXT(" - the mesh has no collision, so wrestlers may walk through it; add collision in the Static Mesh editor") : TEXT("")));
+			bNoCollision ? TEXT(" (no collision; add it in the Static Mesh editor)") : TEXT("")));
 	}
 	GEditor->SelectNone(true, true);
 	GEditor->RedrawLevelEditingViewports();
 	if (Made > 0 || Report.Num() > 0)
 	{
-		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(FString::Printf(TEXT("%d barricade(s) made:\n  %s\n\nYour mesh stays as it is; invisible barricade pieces (one per barricade length, no barricade model) were placed along it, facing the ring, with their reaction, hit and weapon boxes fitted to each section. Settings are on the <name>_Barricade_Settings actor - its Details (Arena Override section) has Can Be Climbed (off to start with), Allow Barricade Moves, Can Be Knocked Down and Starts Down. Save the map to keep it."), Made, *FString::Join(Report, TEXT("\n  ")))), &Title);
+		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(FString::Printf(TEXT("%d barricade(s) made:\n  %s\n\nSettings are on each <name>_Barricade_Settings actor. Save the map to keep them."), Made, *FString::Join(Report, TEXT("\n  ")))), &Title);
 	}
 	return Made;
 }
@@ -2668,10 +2668,10 @@ int32 UAEWArenaTools::RestoreMeshesFromBarricades()
 	}
 	if (PieceCount == 0)
 	{
-		FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("RestoreMeshesNone", "No barricades made from your meshes were found in this level."), &Title);
+		FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("RestoreMeshesNone", "No barricades made from your meshes in this level."), &Title);
 		return 0;
 	}
-	if (FMessageDialog::Open(EAppMsgType::OkCancel, FText::FromString(FString::Printf(TEXT("Remove %d barricade piece(s) made from your meshes and keep (or bring back) the plain meshes?"), PieceCount)), &Title) != EAppReturnType::Ok)
+	if (FMessageDialog::Open(EAppMsgType::OkCancel, FText::FromString(FString::Printf(TEXT("Remove %d barricade piece(s) and keep the plain meshes?"), PieceCount)), &Title) != EAppReturnType::Ok)
 	{
 		return 0;
 	}
@@ -2767,8 +2767,8 @@ int32 UAEWArenaTools::AddBarricadeSettingsToSelected()
 	if (Pieces.Num() == 0)
 	{
 		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(AlreadyCovered > 0
-			? FString(TEXT("The selected barricade pieces already have a Settings actor."))
-			: FString(TEXT("Select one or more barricade pieces in the level first (e.g. the pieces of a split barricade set)."))), &Title);
+			? FString(TEXT("The selected pieces already have a Settings actor."))
+			: FString(TEXT("Select one or more barricade pieces first."))), &Title);
 		return 0;
 	}
 	FVector Center = FVector::ZeroVector;
@@ -2785,12 +2785,12 @@ int32 UAEWArenaTools::AddBarricadeSettingsToSelected()
 	AActor* Guard = SpawnBarricadeSettings(World, Pieces[0]->GetLevel(), Pieces[0]->GetClass(), Pieces, {}, FName(*(FString(BarricadeSettingsPrefix) + Label)), Label, Pieces[0]->GetFolderPath(), FTransform(Center), bClimbable);
 	if (!Guard)
 	{
-		FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("AddBarricadeSettingsFailed", "Could not create the barricade settings blueprint - see the Output Log."), &Title);
+		FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("AddBarricadeSettingsFailed", "Couldn't create the barricade settings blueprint. See the Output Log."), &Title);
 		return 0;
 	}
 	GEditor->SelectNone(true, true);
 	GEditor->SelectActor(Guard, true, true);
-	Notify(FString::Printf(TEXT("Added %s for %d barricade piece(s) - its Details (Arena Override section) has Can Be Climbed, Allow Barricade Moves, Can Be Knocked Down and Starts Down. Save the map to keep it."), *Guard->GetActorLabel(), Pieces.Num()));
+	Notify(FString::Printf(TEXT("Added %s for %d barricade piece(s). Save the map to keep it."), *Guard->GetActorLabel(), Pieces.Num()));
 	return Pieces.Num();
 }
 
@@ -2868,7 +2868,7 @@ int32 UAEWArenaTools::ConvertExistingArenas()
 	}
 	if (Changed.Num() > 0)
 	{
-		Notify(FString::Printf(TEXT("Existing arenas updated once: %d shared sublevel(s) copied, %d barricade piece(s) split.\n%s"), Sublevels, Pieces, *FString::Join(Changed, TEXT("\n"))));
+		Notify(FString::Printf(TEXT("Arenas updated: %d shared sublevel(s) copied, %d barricade piece(s) split.\n%s"), Sublevels, Pieces, *FString::Join(Changed, TEXT("\n"))));
 	}
 	return Changed.Num();
 }
@@ -2911,7 +2911,7 @@ int32 UAEWArenaTools::SplitBarricadeSets()
 	}
 	for (const FString& Name : Skipped)
 	{
-		UE_LOG(LogAEWArena, Warning, TEXT("%s holds meshes as well as barricade pieces - left as one actor"), *Name);
+		UE_LOG(LogAEWArena, Warning, TEXT("%s has meshes and barricade pieces; left as one actor"), *Name);
 	}
 	if (Sets.Num() == 0)
 	{
@@ -2992,7 +2992,7 @@ int32 UAEWArenaTools::SplitBarricadeSets()
 	{
 		UEditorLoadingAndSavingUtils::SavePackages(Changed.Array(), false);
 		GEditor->RedrawLevelEditingViewports();
-		Notify(FString::Printf(TEXT("Barricade sets split into single pieces you can move, delete or swap:%s\nEach set has a <set>_Settings actor for climbing, barricade moves and knock-down."), *Done));
+		Notify(FString::Printf(TEXT("Barricade sets split into single pieces:%s\nEach set has a <set>_Settings actor."), *Done));
 	}
 	return Pieces;
 }
@@ -3023,7 +3023,7 @@ int32 UAEWArenaTools::MakeSharedSublevelsOwn()
 	}
 	for (const FString& E : Empty)
 	{
-		UE_LOG(LogAEWArena, Warning, TEXT("%s streams %s, an empty proxy - it stays shared until the template importer fills it"), *MapName, *FPackageName::GetShortName(E));
+		UE_LOG(LogAEWArena, Warning, TEXT("%s streams %s, an empty proxy; it stays shared"), *MapName, *FPackageName::GetShortName(E));
 	}
 	if (Subs.Num() == 0)
 	{

@@ -101,7 +101,7 @@ namespace AcbImportBridgeLocal
 		UClass* OptionsClass = FindObject<UClass>(ANY_PACKAGE, TEXT("SoundAtomCueSheetImportOptions"));
 		if (!OptionsClass)
 		{
-			OutLog.Add(TEXT("warning: CriWare import options class not found; the importer's saved defaults are used."));
+			OutLog.Add(TEXT("warning: CriWare import options not found; using saved defaults."));
 			return nullptr;
 		}
 		UObject* Options = NewObject<UObject>(GetTransientPackage(), OptionsClass);
@@ -119,7 +119,7 @@ namespace AcbImportBridgeLocal
 		}
 		if (Missing.Num() > 0)
 		{
-			OutLog.Add(TEXT("warning: CriWare import options without these settings (defaults used): ") + FString::Join(Missing, TEXT(", ")));
+			OutLog.Add(TEXT("warning: CriWare import options missing (defaults used): ") + FString::Join(Missing, TEXT(", ")));
 		}
 		return Options;
 	}
@@ -233,13 +233,13 @@ bool AcbImportBridge::Import(const FRequest& Request, TArray<FString>& OutLog, F
 	}
 	if (uint64(Size) > FAcbEditorSession::CriImportLimit)
 	{
-		OutError = FString::Printf(TEXT("%s is %.2f GiB. The CriWare importer reads ACBs with a 32-bit size, so it must stay under 2 GiB. ")
-			TEXT("Keep the audio in a streaming .awb (open the cue sheet with its .awb), or remove tracks."), *FPaths::GetCleanFilename(Request.AcbFile), double(Size) / double(1ull << 30));
+		OutError = FString::Printf(TEXT("%s is %.2f GiB; the CriWare importer needs under 2 GiB. ")
+			TEXT("Use a streaming .awb or remove tracks."), *FPaths::GetCleanFilename(Request.AcbFile), double(Size) / double(1ull << 30));
 		return false;
 	}
 	if (Request.bHasStreamingAwb && !FPaths::FileExists(FPaths::ChangeExtension(Request.AcbFile, TEXT("awb"))))
 	{
-		OutError = TEXT("The streaming .awb must sit next to the .acb with the same name.");
+		OutError = TEXT("The .awb must be next to the .acb, with the same name.");
 		return false;
 	}
 	if (!Request.PackagePath.StartsWith(TEXT("/Game")))
@@ -275,7 +275,7 @@ bool AcbImportBridge::Import(const FRequest& Request, TArray<FString>& OutLog, F
 	FModuleManager::LoadModuleChecked<FAssetToolsModule>("AssetTools").Get().ImportAssetTasks(Tasks);
 	if (Task->ImportedObjectPaths.Num() == 0)
 	{
-		OutError = TEXT("The CriWare importer did not import anything -- see the Output Log (LogCriWareEditor).");
+		OutError = TEXT("Nothing imported. See LogCriWareEditor.");
 		return false;
 	}
 
@@ -381,10 +381,10 @@ bool AcbImportBridge::Import(const FRequest& Request, TArray<FString>& OutLog, F
 		}
 		OutLog.Add(FString::Printf(TEXT("Assigned chunk %s (the cue sheet's) to %d cue asset(s)."), *FString::Join(ChunkNames, TEXT(", ")), CuesAssigned));
 	}
-	OutLog.Add(FString::Printf(TEXT("Imported %s: %d SoundAtomCue assets point at it, %d changed."), *Sheet->GetPathName(), CueAssets, ToSave.Num() - 1));
+	OutLog.Add(FString::Printf(TEXT("Imported %s: %d cue assets, %d changed."), *Sheet->GetPathName(), CueAssets, ToSave.Num() - 1));
 	if (Orphans.Num() > 0)
 	{
-		OutLog.Add(FString::Printf(TEXT("warning: %d cue asset(s) have no cue in the ACB any more (delete them if unused): %s"),
+		OutLog.Add(FString::Printf(TEXT("warning: %d cue asset(s) no longer in the ACB: %s"),
 			Orphans.Num(), *FString::Join(Orphans, TEXT(", "))));
 	}
 
@@ -400,7 +400,7 @@ bool AcbImportBridge::Import(const FRequest& Request, TArray<FString>& OutLog, F
 		const FString AwbInContent = FPaths::ProjectContentDir() / Request.AwbDirectory / SheetName + TEXT(".awb");
 		if (Request.AwbDirectory.IsEmpty())
 		{
-			OutLog.Add(TEXT("warning: AWB folder is empty, so the cue sheet uses CriWare's ContentDir and the .awb was copied to Content/. Set 'AWB folder' (default GameData/Resources/CriWareData)."));
+			OutLog.Add(TEXT("warning: AWB folder is empty, so the .awb was copied to Content/. Set 'AWB folder'."));
 		}
 		else if (!FPaths::FileExists(AwbInContent))
 		{
@@ -409,12 +409,12 @@ bool AcbImportBridge::Import(const FRequest& Request, TArray<FString>& OutLog, F
 		}
 		else
 		{
-			OutLog.Add(FString::Printf(TEXT("AWB in project: %s (%.1f MB); the cue sheet loads Content/%s/%s.awb."),
+			OutLog.Add(FString::Printf(TEXT("AWB: %s (%.1f MB), loaded from Content/%s/%s.awb."),
 				*AwbInContent, double(IFileManager::Get().FileSize(*AwbInContent)) / (1024.0 * 1024.0), *Request.AwbDirectory, *SheetName));
 		}
 		if (Sheet->bOverrideAwbDirectory != !Request.AwbDirectory.IsEmpty())
 		{
-			OutLog.Add(TEXT("warning: the cue sheet's 'Override AWB directory' flag was not set by the importer; set it on the cue sheet asset."));
+			OutLog.Add(TEXT("warning: set 'Override AWB directory' on the cue sheet asset."));
 		}
 		if (Request.bStageAwbForPackaging && !Request.AwbDirectory.IsEmpty())
 		{
@@ -429,7 +429,7 @@ bool AcbImportBridge::Import(const FRequest& Request, TArray<FString>& OutLog, F
 				}
 				else if (Chunk == 0)
 				{
-					OutLog.Add(FString::Printf(TEXT("warning: cue sheet %s has no chunk, so %s.awb stays in pakchunk0. Assign the cue sheet a chunk (Asset Actions > Assign to Chunk) and save it: the .awb rule follows."), *SheetName, *SheetName));
+					OutLog.Add(FString::Printf(TEXT("warning: cue sheet %s has no chunk, so %s.awb stays in pakchunk0. Give it a chunk and save."), *SheetName, *SheetName));
 				}
 			}
 			EnsureAwbPakRule(Request.AwbDirectory, SheetName, PakName, OutLog);
@@ -443,7 +443,7 @@ bool AcbImportBridge::Import(const FRequest& Request, TArray<FString>& OutLog, F
 		{
 			if (Request.CueNames.Contains(Name))
 			{
-				OutLog.Add(FString::Printf(TEXT("%s was deleted and added again, so DataTable rows keep using it."), *Name));
+				OutLog.Add(FString::Printf(TEXT("%s was deleted and re-added, so rows keep using it."), *Name));
 			}
 			else
 			{
@@ -479,7 +479,7 @@ bool AcbImportBridge::Import(const FRequest& Request, TArray<FString>& OutLog, F
 		}
 		else
 		{
-			OutLog.Add(TEXT("warning: some packages could not be saved -- save them from the Content Browser."));
+			OutLog.Add(TEXT("warning: some packages couldn't be saved. Save them from the Content Browser."));
 		}
 	}
 
@@ -672,7 +672,7 @@ namespace AcbDataTableLocal
 	{
 		if (Table->GetOutermost()->HasAnyPackageFlags(PKG_Cooked))
 		{
-			OutLog.Add(FString::Printf(TEXT("warning: %s is cooked and can't be changed; update it by hand."), *Table->GetName()));
+			OutLog.Add(FString::Printf(TEXT("warning: %s is cooked; update it by hand."), *Table->GetName()));
 			return false;
 		}
 		return true;
@@ -759,7 +759,7 @@ namespace AcbDataTableLocal
 			if (!RemovedIds.Contains(Id))
 			{
 				OutLog.Add(FString::Printf(TEXT("Unlock item %d kept: %s."), Id,
-					StillUsed.Contains(Id) ? TEXT("another row still uses it") : TEXT("it isn't in a Cue Table's Unlock New Table (vanilla unlock items are never removed)")));
+					StillUsed.Contains(Id) ? TEXT("another row still uses it") : TEXT("it isn't in an Unlock New Table")));
 			}
 		}
 	}
@@ -800,7 +800,7 @@ void AcbImportBridge::UpdateDataTables(const FString& PackagePath, const TMap<FS
 			Edit.NewObject = Edit.NewPath.TryLoad();
 			if (!Edit.NewObject)
 			{
-				OutLog.Add(FString::Printf(TEXT("warning: no cue asset %s after import, so DataTables still use %s."), *Change.Value, *Change.Key));
+				OutLog.Add(FString::Printf(TEXT("warning: no cue asset %s after import; tables still use %s."), *Change.Value, *Change.Key));
 				continue;
 			}
 		}
@@ -912,8 +912,8 @@ bool AcbImportBridge::EnsureStagedForPackaging(const FString& ContentRelativeDir
 
 	if (Covers(Packaging->DirectoriesToAlwaysStageAsNonUFS))
 	{
-		OutLog.Add(TEXT("warning: Content/") + Dir + TEXT(" is staged as non-UFS (loose files next to the paks). The game reads its AWBs from inside the paks; ")
-			TEXT("move it to 'Additional Non-Asset Directories To Package' unless you ship the loose file."));
+		OutLog.Add(TEXT("warning: Content/") + Dir + TEXT(" is staged as non-UFS, but AWBs must be inside the paks. ")
+			TEXT("Move it to 'Additional Non-Asset Directories To Package'."));
 		return true;
 	}
 	if (Covers(Packaging->DirectoriesToAlwaysStageAsUFS))
@@ -926,8 +926,8 @@ bool AcbImportBridge::EnsureStagedForPackaging(const FString& ContentRelativeDir
 	NewEntry.Path = Dir;
 	Packaging->DirectoriesToAlwaysStageAsUFS.Add(NewEntry);
 	Packaging->UpdateDefaultConfigFile();
-	OutLog.Add(TEXT("Packaging: added Content/") + Dir + TEXT(" to 'Additional Non-Asset Directories To Package' (DefaultGame.ini). ")
-		TEXT("Files there go to pakchunk0 unless a pak file rule moves them."));
+	OutLog.Add(TEXT("Packaging: added Content/") + Dir + TEXT(" to 'Additional Non-Asset Directories To Package'. ")
+		TEXT("It goes to pakchunk0 unless a pak rule moves it."));
 	return true;
 }
 
@@ -935,7 +935,7 @@ int32 AcbImportBridge::FindPackageChunk(const FString& PackageName, TArray<FStri
 {
 	if (!UAssetManager::IsValid())
 	{
-		OutLog.Add(TEXT("warning: no Asset Manager, so the cue sheet's chunk is unknown."));
+		OutLog.Add(TEXT("warning: no Asset Manager; cue sheet chunk unknown."));
 		return INDEX_NONE;
 	}
 	UAssetManager& Manager = UAssetManager::Get();
@@ -1042,7 +1042,7 @@ bool AcbImportBridge::EnsureAwbPakRule(const FString& ContentRelativeDir, const 
 
 	if (Out == Lines)
 	{
-		OutLog.Add(FString::Printf(TEXT("Packaging: %s.awb already goes to %s (DefaultPakFileRules.ini)."), *SheetName, *PakName));
+		OutLog.Add(FString::Printf(TEXT("Packaging: %s.awb already goes to %s."), *SheetName, *PakName));
 		return true;
 	}
 	if (!FFileHelper::SaveStringArrayToFile(Out, *RulesFile))
@@ -1052,11 +1052,11 @@ bool AcbImportBridge::EnsureAwbPakRule(const FString& ContentRelativeDir, const 
 	}
 	if (bWant)
 	{
-		OutLog.Add(FString::Printf(TEXT("Packaging: %s.awb now goes to %s-<Platform>.pak (rule in Config/DefaultPakFileRules.ini)."), *SheetName, *PakName));
+		OutLog.Add(FString::Printf(TEXT("Packaging: %s.awb now goes to %s-<Platform>.pak."), *SheetName, *PakName));
 	}
 	else
 	{
-		OutLog.Add(FString::Printf(TEXT("Packaging: removed the pak rule for %s.awb; it goes to pakchunk0."), *SheetName));
+		OutLog.Add(FString::Printf(TEXT("Packaging: removed the pak rule for %s.awb (now pakchunk0)."), *SheetName));
 	}
 	return true;
 }
@@ -1173,7 +1173,7 @@ int32 AcbImportBridge::SyncAllAwbPakRules(TArray<FString>& OutLog)
 			++Synced;
 		}
 	}
-	OutLog.Add(FString::Printf(TEXT("Checked %d cue sheet(s); %d have a .awb in the project and a pak rule that follows their chunk."), Sheets.Num(), Synced));
+	OutLog.Add(FString::Printf(TEXT("Checked %d cue sheet(s); %d have a .awb and a matching pak rule."), Sheets.Num(), Synced));
 	return Synced;
 }
 

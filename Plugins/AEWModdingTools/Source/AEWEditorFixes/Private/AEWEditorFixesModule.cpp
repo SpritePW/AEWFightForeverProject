@@ -27,7 +27,7 @@ namespace AEWEditorFixes
 		if (Data.CompressedTrackToSkeletonMapTable.Num() > 0 &&
 			(Data.BoneCompressionCodec == nullptr || !Data.CompressedDataStructure.IsValid()))
 		{
-			UE_LOG(LogAEWAnimFix, Warning, TEXT("%s: bone compression codec not found (settings %s) - bone tracks disabled, it plays the reference pose"),
+			UE_LOG(LogAEWAnimFix, Warning, TEXT("%s: bone codec not found (%s); plays the reference pose"),
 				*Seq->GetPathName(), *GetPathNameSafe(Seq->BoneCompressionSettings));
 			Data.CompressedTrackToSkeletonMapTable.Empty();
 			Data.CompressedDataStructure.Reset();
@@ -37,7 +37,7 @@ namespace AEWEditorFixes
 		{
 			if (Data.CompressedCurveByteStream.Num() > 0 || Data.CompressedCurveNames.Num() > 0)
 			{
-				UE_LOG(LogAEWAnimFix, Warning, TEXT("%s: curve compression codec not found (settings %s) - curves disabled"),
+				UE_LOG(LogAEWAnimFix, Warning, TEXT("%s: curve codec not found (%s); curves disabled"),
 					*Seq->GetPathName(), *GetPathNameSafe(Seq->CurveCompressionSettings));
 			}
 			Data.CurveCompressionCodec = GetMutableDefault<UAEWNullCurveCodec>();

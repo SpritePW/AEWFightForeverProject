@@ -1169,7 +1169,7 @@ namespace
 		{
 			if (!T.Actor.IsValid())
 			{
-				FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("TemplatesGone", "The crowd people to copy are no longer loaded. Run Fill Audience From Selected again."), &Title);
+				FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("TemplatesGone", "Crowd templates are no longer loaded. Run Fill Audience again."), &Title);
 				return 0;
 			}
 		}
@@ -1306,7 +1306,7 @@ namespace
 		{
 			UE_LOG(LogAEWAudience, Display, TEXT("%s"), *Line);
 		}
-		UE_LOG(LogAEWAudience, Display, TEXT("Placed %d crowd actor(s) in %s, copied from %s (%d people, %d billboards to pick from)%s%s."),
+		UE_LOG(LogAEWAudience, Display, TEXT("Placed %d crowd actor(s) in %s from %s (%d people, %d billboards)%s%s."),
 			Made, *TargetName, *Ctx.TemplateSource, Ctx.People.Num(), Ctx.Billboards.Num(),
 			Replaced > 0 ? *FString::Printf(TEXT(", replacing %d"), Replaced) : TEXT(""),
 			MarkersRemoved > 0 ? *FString::Printf(TEXT(", %d marker(s) removed"), MarkersRemoved) : TEXT(""));
@@ -1340,7 +1340,7 @@ namespace
 		};
 		Grid->AddSlot(0, Line).Padding(0.f, 3.f, 12.f, 3.f).VAlign(VAlign_Center)
 		[
-			SNew(STextBlock).Text(LOCTEXT("OptType", "Type")).ToolTipText(LOCTEXT("OptTypeTip", "By distance: people near the ring, billboards beyond the distance below. People only / Billboards only: the whole fill is one kind."))
+			SNew(STextBlock).Text(LOCTEXT("OptType", "Type")).ToolTipText(LOCTEXT("OptTypeTip", "Distance: people near the ring, billboards further out."))
 		];
 		Grid->AddSlot(1, Line).Padding(0.f, 3.f)
 		[
@@ -1391,19 +1391,19 @@ namespace
 			];
 			++Line;
 		};
-		AddCount(LOCTEXT("OptPerRow", "Per row"), LOCTEXT("OptPerRowTip", "How many people in each row."), &FFillOptions::PerRow);
-		AddCount(LOCTEXT("OptRows", "Rows"), LOCTEXT("OptRowsTip", "How many rows, one behind the other."), &FFillOptions::Rows);
-		AddRow(LOCTEXT("OptSeat", "Seat gap"), LOCTEXT("OptSeatTip", "Distance between people in a row, in cm. Without a marker, 0 spreads each row evenly across the mesh."), &FFillOptions::Seat, 1.f, 0.f, 1000.f, 5.f);
-		AddRow(LOCTEXT("OptRow", "Row gap"), LOCTEXT("OptRowTip", "Distance between rows, in cm. Without a marker, 0 spreads the rows evenly over the mesh."), &FFillOptions::Row, 1.f, 0.f, 1000.f, 5.f);
-		AddRow(LOCTEXT("OptCurve", "Curve"), LOCTEXT("OptCurveTip", "Bend the rows into arcs, in degrees. The angle is how far the rows wrap around: 0 = straight, 90 = a quarter circle curving towards the way they face (around the ring), negative values curve the other way. Everyone faces the centre of the curve."), &FFillOptions::Curve, 1.f, -270.f, 270.f, 1.f);
-		AddRow(LOCTEXT("OptFill", "Fill %"), LOCTEXT("OptFillTip", "Share of the rows x people spots that get someone. Lowering it only removes people; the rest stay where they are."), &FFillOptions::Fill, 100.f, 0.f, 100.f, 1.f);
-		AddRow(LOCTEXT("OptStraight", "Straightness %"), LOCTEXT("OptStraightTip", "100 = everyone exactly in line; lower scatters people forwards, backwards and sideways."), &FFillOptions::Straight, 100.f, 0.f, 100.f, 1.f);
-		AddRow(LOCTEXT("OptSlope", "Max slope"), LOCTEXT("OptSlopeTip", "Steepest surface people will stand on, in degrees. Steeper surfaces (walls, railings, sloped roofs) are ignored and people stand on the next surface below."), &FFillOptions::Slope, 1.f, 0.f, 60.f, 1.f);
-		AddRow(LOCTEXT("OptBillboard", "Billboards from"), LOCTEXT("OptBillboardTip", "With Type set to Distance: spots further than this many cm from the ring's centre get flat billboard cards instead of full people. 0 = everyone is a full person."), &FFillOptions::Billboard, 1.f, 0.f, 100000.f, 100.f,
+		AddCount(LOCTEXT("OptPerRow", "Per row"), LOCTEXT("OptPerRowTip", "People in each row."), &FFillOptions::PerRow);
+		AddCount(LOCTEXT("OptRows", "Rows"), LOCTEXT("OptRowsTip", "Number of rows."), &FFillOptions::Rows);
+		AddRow(LOCTEXT("OptSeat", "Seat gap"), LOCTEXT("OptSeatTip", "Gap between people in a row (cm). 0 = spread evenly."), &FFillOptions::Seat, 1.f, 0.f, 1000.f, 5.f);
+		AddRow(LOCTEXT("OptRow", "Row gap"), LOCTEXT("OptRowTip", "Gap between rows (cm). 0 = spread evenly."), &FFillOptions::Row, 1.f, 0.f, 1000.f, 5.f);
+		AddRow(LOCTEXT("OptCurve", "Curve"), LOCTEXT("OptCurveTip", "Bend rows into an arc (degrees). 0 = straight, negative curves the other way."), &FFillOptions::Curve, 1.f, -270.f, 270.f, 1.f);
+		AddRow(LOCTEXT("OptFill", "Fill %"), LOCTEXT("OptFillTip", "Share of spots that get someone."), &FFillOptions::Fill, 100.f, 0.f, 100.f, 1.f);
+		AddRow(LOCTEXT("OptStraight", "Straightness %"), LOCTEXT("OptStraightTip", "100 = in line; lower scatters people."), &FFillOptions::Straight, 100.f, 0.f, 100.f, 1.f);
+		AddRow(LOCTEXT("OptSlope", "Max slope"), LOCTEXT("OptSlopeTip", "Steepest surface people stand on (degrees)."), &FFillOptions::Slope, 1.f, 0.f, 60.f, 1.f);
+		AddRow(LOCTEXT("OptBillboard", "Billboards from"), LOCTEXT("OptBillboardTip", "With Type Distance: spots beyond this (cm) get billboards. 0 = none."), &FFillOptions::Billboard, 1.f, 0.f, 100000.f, 100.f,
 			TAttribute<bool>::Create(TAttribute<bool>::FGetter::CreateLambda([Ctx]() { return Ctx->Options.Type == EAEWCrowdType::ByDistance; })));
 
 		const FText Where = FText::FromString(Ctx->Markers.Num() > 0
-			? FString::Printf(TEXT("%d marker(s): the crowd is centred on each and faces its X arrow. Move or rotate the marker to move the block."), Ctx->Markers.Num())
+			? FString::Printf(TEXT("%d marker(s). Move or rotate a marker to move its block."), Ctx->Markers.Num())
 			: FString::Printf(TEXT("%d mesh(es)"), Ctx->Surfaces.Num()));
 
 		auto Close = [WeakWindow]()
@@ -1562,7 +1562,7 @@ int32 UAEWArenaTools::FillAudienceFromSelected()
 	}
 	if (Ctx->Markers.Num() == 0 && SurfaceActors.Num() == 0)
 	{
-		FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("FillNone", "Select an Empty Actor where the crowd should go (Place Actors > Basic > Empty Actor), turned so its X arrow points the way the crowd should face. Or select meshes to fill them completely.\n\nThe crowd stands on whatever is under the marker (or at the marker's height where there is nothing) and the marker is removed afterwards."), &Title);
+		FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("FillNone", "Select an Empty Actor where the crowd goes, its X arrow pointing the way they face. Or select meshes to fill."), &Title);
 		return 0;
 	}
 
@@ -1601,7 +1601,7 @@ int32 UAEWArenaTools::FillAudienceFromSelected()
 	if (Ctx->People.Num() == 0)
 	{
 		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(FString::Printf(
-			TEXT("No crowd people (BP_Audience) to copy: the open arena has none and Crowd Template Level (%s) could not be loaded or has none.\n\nSet Crowd Template Level in Project Settings > Arena Maker > Audience."),
+			TEXT("No crowd to copy: the arena has none and Crowd Template Level (%s) has none.\n\nSet it in Project Settings > Arena Maker."),
 			*S->AudienceTemplateLevel.ToString())), &Title);
 		return 0;
 	}

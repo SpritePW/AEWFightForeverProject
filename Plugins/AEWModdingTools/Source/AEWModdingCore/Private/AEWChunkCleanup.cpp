@@ -134,13 +134,13 @@ namespace AEWChunkCleanup
 			Log.Add(TEXT("No chunk assignments outside the labels were found."));
 			if (SkippedCooked.Num() > 0)
 			{
-				Log.Add(FString::Printf(TEXT("(%d never-cooked game package(s) carry chunk IDs from the game; they aren't cooked, so they're left as they are.)"), SkippedCooked.Num()));
+				Log.Add(FString::Printf(TEXT("(%d never-cooked game package(s) left as they are.)"), SkippedCooked.Num()));
 			}
 			return 0;
 		}
 
 		TArray<FString> Report;
-		Report.Add(FString::Printf(TEXT("Chunk assignments outside the labels (%d package(s), %d Asset Manager rule(s)):"), ToClear.Num(), RuleCount));
+		Report.Add(FString::Printf(TEXT("Chunk IDs outside labels (%d package(s), %d Asset Manager rule(s)):"), ToClear.Num(), RuleCount));
 		for (int32 i = 0; i < PackageLines.Num() && i < 30; ++i)
 		{
 			Report.Add(PackageLines[i]);
@@ -154,7 +154,7 @@ namespace AEWChunkCleanup
 		if (bAsk)
 		{
 			const FString Question = FString::Join(Log, TEXT("\n")) + TEXT("\n\n") + FString::Join(Report, TEXT("\n")) +
-				TEXT("\n\nClear these? The packages are re-saved with no chunk IDs; the rules are set to no chunk.");
+				TEXT("\n\nClear them?");
 			if (FMessageDialog::Open(EAppMsgType::OkCancel, FText::FromString(Question)) != EAppReturnType::Ok)
 			{
 				Log.Add(TEXT("Cancelled."));
@@ -224,10 +224,10 @@ namespace AEWChunkCleanup
 			}
 		}
 
-		Log.Add(FString::Printf(TEXT("Cleared chunk IDs from %d package(s) and %d Asset Manager rule(s)."), ToSave.Num() - Failed.Num(), RuleCount));
+		Log.Add(FString::Printf(TEXT("Cleared chunk IDs from %d package(s) and %d rule(s)."), ToSave.Num() - Failed.Num(), RuleCount));
 		if (Failed.Num() > 0)
 		{
-			Log.Add(FString::Printf(TEXT("warning: %d package(s) could not be re-saved (see the Output Log):"), Failed.Num()));
+			Log.Add(FString::Printf(TEXT("warning: %d package(s) couldn't be re-saved:"), Failed.Num()));
 			for (int32 i = 0; i < Failed.Num() && i < 20; ++i)
 			{
 				Log.Add(TEXT("  ") + Failed[i]);
