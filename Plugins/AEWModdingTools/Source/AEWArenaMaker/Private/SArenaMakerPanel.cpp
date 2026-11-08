@@ -1,5 +1,5 @@
-#include "SArenaTemplatePanel.h"
-#include "AEWArenaTemplateSettings.h"
+#include "SArenaMakerPanel.h"
+#include "AEWArenaMakerSettings.h"
 #include "AEWToolUI.h"
 #include "AEWPackaging.h"
 #include "AEWModdingSettings.h"
@@ -18,7 +18,7 @@
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Views/STableRow.h"
 
-#define LOCTEXT_NAMESPACE "AEWArenaTemplate"
+#define LOCTEXT_NAMESPACE "AEWArenaMaker"
 
 class FArenaLogCapture : public FOutputDevice
 {
@@ -77,9 +77,9 @@ private:
 	TSharedPtr<FArenaTemplateItem> Item;
 };
 
-void SArenaTemplatePanel::Construct(const FArguments& InArgs)
+void SArenaMakerPanel::Construct(const FArguments& InArgs)
 {
-	const UAEWArenaTemplateSettings* S = GetDefault<UAEWArenaTemplateSettings>();
+	const UAEWArenaMakerSettings* S = GetDefault<UAEWArenaMakerSettings>();
 	ParentFolder = S->DefaultParentFolder.Path;
 	ChunkId = AEWPackaging::NextFreeChunkId();
 
@@ -94,7 +94,7 @@ void SArenaTemplatePanel::Construct(const FArguments& InArgs)
 		[
 			AEWToolUI::MakeButton(LOCTEXT("Sync", "Sync arena list"),
 				LOCTEXT("SyncTip", "Remove mod arenas whose map was deleted from the arena table, the enum and the unlock table, then renumber the mod arenas without gaps (renaming their <ID>_ maps and folders)."),
-				[this]() { UAEWArenaTools::SyncArenaList(GetDefault<UAEWArenaTemplateSettings>()->bRenumberOnDelete, true); Refresh(); })
+				[this]() { UAEWArenaTools::SyncArenaList(GetDefault<UAEWArenaMakerSettings>()->bRenumberOnDelete, true); Refresh(); })
 		]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(16, 0, 8, 0)
 		[
@@ -113,7 +113,7 @@ void SArenaTemplatePanel::Construct(const FArguments& InArgs)
 			AEWToolUI::MakeButton(LOCTEXT("Settings", "Settings..."), LOCTEXT("SettingsTip", "Project Settings > Plugins > Arena Maker"),
 				[]() { UAEWArenaTools::OpenSettings(); })
 		],
-		TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateSP(this, &SArenaTemplatePanel::GetStatusText)));
+		TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateSP(this, &SArenaMakerPanel::GetStatusText)));
 
 	TSharedRef<SWidget> List = SNew(SVerticalBox)
 		+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 4)
@@ -127,7 +127,7 @@ void SArenaTemplatePanel::Construct(const FArguments& InArgs)
 			SAssignNew(ListView, SListView<TSharedPtr<FArenaTemplateItem>>)
 			.ListItemsSource(&VisibleTemplates)
 			.SelectionMode(ESelectionMode::Single)
-			.OnGenerateRow(this, &SArenaTemplatePanel::OnGenerateRow)
+			.OnGenerateRow(this, &SArenaMakerPanel::OnGenerateRow)
 			.OnSelectionChanged_Lambda([this](TSharedPtr<FArenaTemplateItem> Item, ESelectInfo::Type) { Selected = Item; })
 			.HeaderRow
 			(
@@ -189,7 +189,7 @@ void SArenaTemplatePanel::Construct(const FArguments& InArgs)
 				[
 					AEWToolUI::MakeRow(FText::GetEmpty(),
 						SNew(STextBlock)
-						.Text(this, &SArenaTemplatePanel::GetPreviewText)
+						.Text(this, &SArenaMakerPanel::GetPreviewText)
 						.ColorAndOpacity_Lambda([this]() { return IdProblem() ? FSlateColor(FLinearColor::Red) : FSlateColor::UseSubduedForeground(); }))
 				]
 				+ SVerticalBox::Slot().AutoHeight()
@@ -238,13 +238,13 @@ void SArenaTemplatePanel::Construct(const FArguments& InArgs)
 			AEWToolUI::MakeSection(LOCTEXT("ArenaListSection", "Arena list"),
 				SNew(STextBlock)
 				.Font(FCoreStyle::GetDefaultFontStyle("Mono", 9))
-				.Text(this, &SArenaTemplatePanel::GetArenaListText),
+				.Text(this, &SArenaMakerPanel::GetArenaListText),
 				true)
 		]
 
 		+ SVerticalBox::Slot().AutoHeight()
 		[
-			AEWToolUI::MakeSection(LOCTEXT("SettingsArea", "Settings"), AEWToolUI::MakeSettingsView(GetMutableDefault<UAEWArenaTemplateSettings>()), true)
+			AEWToolUI::MakeSection(LOCTEXT("SettingsArea", "Settings"), AEWToolUI::MakeSettingsView(GetMutableDefault<UAEWArenaMakerSettings>()), true)
 		]);
 
 	ChildSlot
@@ -255,31 +255,31 @@ void SArenaTemplatePanel::Construct(const FArguments& InArgs)
 	];
 
 	IAssetRegistry& AR = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
-	AddedHandle = AR.OnAssetAdded().AddSP(this, &SArenaTemplatePanel::OnAssetChanged);
-	RemovedHandle = AR.OnAssetRemoved().AddSP(this, &SArenaTemplatePanel::OnAssetChanged);
-	RenamedHandle = AR.OnAssetRenamed().AddSP(this, &SArenaTemplatePanel::OnAssetRenamed);
+	AddedHandle = AR.OnAssetAdded().AddSP(this, &SArenaMakerPanel::OnAssetChanged);
+	RemovedHandle = AR.OnAssetRemoved().AddSP(this, &SArenaMakerPanel::OnAssetChanged);
+	RenamedHandle = AR.OnAssetRenamed().AddSP(this, &SArenaMakerPanel::OnAssetRenamed);
 
 	Refresh();
 	AddLog(TEXT("Pick a template, set the ID and name, then Create arena. The list updates by itself when templates or arenas change."));
 }
 
-void SArenaTemplatePanel::OnAssetChanged(const FAssetData&)
+void SArenaMakerPanel::OnAssetChanged(const FAssetData&)
 {
 	QueueRefresh();
 }
 
-void SArenaTemplatePanel::OnAssetRenamed(const FAssetData&, const FString&)
+void SArenaMakerPanel::OnAssetRenamed(const FAssetData&, const FString&)
 {
 	QueueRefresh();
 }
 
-void SArenaTemplatePanel::QueueRefresh()
+void SArenaMakerPanel::QueueRefresh()
 {
 	bRefreshPending = true;
 	RefreshAt = FPlatformTime::Seconds() + 1.0;
 }
 
-void SArenaTemplatePanel::Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime)
+void SArenaMakerPanel::Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime)
 {
 	SCompoundWidget::Tick(AllottedGeometry, InCurrentTime, InDeltaTime);
 	if (!bRefreshPending || FPlatformTime::Seconds() < RefreshAt || UAEWArenaTools::IsBusy())
@@ -294,7 +294,7 @@ void SArenaTemplatePanel::Tick(const FGeometry& AllottedGeometry, const double I
 	Refresh(true);
 }
 
-SArenaTemplatePanel::~SArenaTemplatePanel()
+SArenaMakerPanel::~SArenaMakerPanel()
 {
 	if (LogCapture.IsValid() && GLog)
 	{
@@ -309,7 +309,7 @@ SArenaTemplatePanel::~SArenaTemplatePanel()
 	}
 }
 
-void SArenaTemplatePanel::Refresh(bool bQuiet)
+void SArenaMakerPanel::Refresh(bool bQuiet)
 {
 	const int32 OldTemplates = AllTemplates.Num();
 	const int32 OldArenas = Arenas.Num();
@@ -354,7 +354,7 @@ void SArenaTemplatePanel::Refresh(bool bQuiet)
 	}
 }
 
-void SArenaTemplatePanel::ApplyFilter()
+void SArenaMakerPanel::ApplyFilter()
 {
 	VisibleTemplates.Reset();
 	for (const TSharedPtr<FArenaTemplateItem>& Item : AllTemplates)
@@ -370,7 +370,7 @@ void SArenaTemplatePanel::ApplyFilter()
 	}
 }
 
-void SArenaTemplatePanel::Create()
+void SArenaMakerPanel::Create()
 {
 	if (!Selected.IsValid())
 	{
@@ -387,17 +387,17 @@ void SArenaTemplatePanel::Create()
 	Refresh();
 }
 
-void SArenaTemplatePanel::AddLog(const FString& Line)
+void SArenaMakerPanel::AddLog(const FString& Line)
 {
 	LogText += Line + TEXT("\n");
 }
 
-bool SArenaTemplatePanel::IsRegistering() const
+bool SArenaMakerPanel::IsRegistering() const
 {
 	return bRegister;
 }
 
-bool SArenaTemplatePanel::IdProblem() const
+bool SArenaMakerPanel::IdProblem() const
 {
 	if (!bRegister)
 	{
@@ -411,12 +411,12 @@ bool SArenaTemplatePanel::IdProblem() const
 	return !bCheckedFree;
 }
 
-FString SArenaTemplatePanel::MapName() const
+FString SArenaMakerPanel::MapName() const
 {
 	return bRegister ? UAEWArenaTools::MakeArenaMapName(ArenaId, Name) : Name.TrimStartAndEnd();
 }
 
-FText SArenaTemplatePanel::GetPreviewText() const
+FText SArenaMakerPanel::GetPreviewText() const
 {
 	if (IdProblem())
 	{
@@ -425,14 +425,14 @@ FText SArenaTemplatePanel::GetPreviewText() const
 	return FText::Format(LOCTEXT("MapName", "Map name: {0}"), FText::FromString(MapName()));
 }
 
-FText SArenaTemplatePanel::GetStatusText() const
+FText SArenaMakerPanel::GetStatusText() const
 {
-	const UAEWArenaTemplateSettings* S = GetDefault<UAEWArenaTemplateSettings>();
+	const UAEWArenaMakerSettings* S = GetDefault<UAEWArenaMakerSettings>();
 	return FText::FromString(FString::Printf(TEXT("Templates: %d    Arena table: %s (%d rows)    Next free arena ID: %d"),
 		AllTemplates.Num(), *S->ArenaTable.GetAssetName(), Arenas.Num(), NextId));
 }
 
-FText SArenaTemplatePanel::GetArenaListText() const
+FText SArenaMakerPanel::GetArenaListText() const
 {
 	FString Out;
 	for (const FAEWArenaListEntry& A : Arenas)
@@ -442,7 +442,7 @@ FText SArenaTemplatePanel::GetArenaListText() const
 	return FText::FromString(Out.TrimEnd());
 }
 
-TSharedRef<ITableRow> SArenaTemplatePanel::OnGenerateRow(TSharedPtr<FArenaTemplateItem> Item, const TSharedRef<STableViewBase>& Owner)
+TSharedRef<ITableRow> SArenaMakerPanel::OnGenerateRow(TSharedPtr<FArenaTemplateItem> Item, const TSharedRef<STableViewBase>& Owner)
 {
 	return SNew(SArenaTemplateRow, Owner, Item);
 }

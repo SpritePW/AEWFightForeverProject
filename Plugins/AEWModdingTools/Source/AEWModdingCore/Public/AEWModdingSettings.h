@@ -15,7 +15,7 @@ public:
 	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
 
 	UPROPERTY(EditAnywhere, config, Category = "Packaging", meta = (DisplayName = "First Chunk ID", ClampMin = "1", ToolTip = "Every arena, edit part and cue sheet the tools label gets its own chunk (pakchunk<ID>-WindowsNoEditor), so each mod packages separately. New ones take the first free ID from here up, skipping the table chunks and any ID a label already uses."))
-	int32 ChunkId = 13;
+	int32 ChunkId = 14;
 
 	UPROPERTY(EditAnywhere, config, Category = "Tables", meta = (DisplayName = "Base Tables Label", ToolTip = "Label for every other DataTable (composites, _Original tables, ...) and the arena enum."))
 	FString BaseTablesLabel;

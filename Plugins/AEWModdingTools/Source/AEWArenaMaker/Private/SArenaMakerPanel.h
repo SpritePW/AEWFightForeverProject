@@ -15,14 +15,14 @@ struct FArenaTemplateItem
 	FString Folder;
 };
 
-class SArenaTemplatePanel : public SCompoundWidget
+class SArenaMakerPanel : public SCompoundWidget
 {
 public:
-	SLATE_BEGIN_ARGS(SArenaTemplatePanel) {}
+	SLATE_BEGIN_ARGS(SArenaMakerPanel) {}
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs);
-	virtual ~SArenaTemplatePanel();
+	virtual ~SArenaMakerPanel();
 	virtual void Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime) override;
 
 private:

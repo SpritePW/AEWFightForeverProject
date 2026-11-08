@@ -1,6 +1,6 @@
-#include "AEWArenaTemplateSettings.h"
+#include "AEWArenaMakerSettings.h"
 
-UAEWArenaTemplateSettings::UAEWArenaTemplateSettings()
+UAEWArenaMakerSettings::UAEWArenaMakerSettings()
 {
 	ArenaEnum = FSoftObjectPath(TEXT("/Game/GameData/Assets/Enum/Arena/EArenaID.EArenaID"));
 	ArenaTable = FSoftObjectPath(TEXT("/Game/GameData/Assets/DataTable/Arena/DT_ArenaOriginal.DT_ArenaOriginal"));

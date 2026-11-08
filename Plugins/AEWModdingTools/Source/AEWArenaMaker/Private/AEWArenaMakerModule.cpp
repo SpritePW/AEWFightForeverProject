@@ -4,38 +4,38 @@
 #include "ToolMenus.h"
 #include "Widgets/Docking/SDockTab.h"
 #include "AEWArenaTools.h"
-#include "AEWArenaTemplateSettings.h"
+#include "AEWArenaMakerSettings.h"
 #include "AssetRegistryModule.h"
 #include "Containers/Ticker.h"
 #include "Editor.h"
 #include "Engine/World.h"
 #include "AEWTableUtils.h"
-#include "SArenaTemplatePanel.h"
+#include "SArenaMakerPanel.h"
 
-#define LOCTEXT_NAMESPACE "AEWArenaTemplate"
+#define LOCTEXT_NAMESPACE "AEWArenaMaker"
 
-static const FName ArenaTemplateTabName(TEXT("AEWArenaTemplate"));
+static const FName ArenaTemplateTabName(TEXT("AEWArenaMaker"));
 
-class FAEWArenaTemplateModule : public IModuleInterface
+class FAEWArenaMakerModule : public IModuleInterface
 {
 public:
 	virtual void StartupModule() override
 	{
 		FGlobalTabmanager::Get()->RegisterNomadTabSpawner(ArenaTemplateTabName,
-			FOnSpawnTab::CreateRaw(this, &FAEWArenaTemplateModule::SpawnTab))
+			FOnSpawnTab::CreateRaw(this, &FAEWArenaMakerModule::SpawnTab))
 			.SetDisplayName(LOCTEXT("TabTitle", "Arena Maker"))
 			.SetTooltipText(LOCTEXT("TabTip", "Create new arenas from imported templates"))
 			.SetMenuType(ETabSpawnerMenuType::Hidden);
 
-		UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FAEWArenaTemplateModule::RegisterMenus));
+		UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FAEWArenaMakerModule::RegisterMenus));
 
 		FAssetRegistryModule& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
-		RemovedHandle = AssetRegistry.Get().OnAssetRemoved().AddRaw(this, &FAEWArenaTemplateModule::OnAssetRemoved);
-		SaveHandle = FEditorDelegates::PostSaveWorld.AddRaw(this, &FAEWArenaTemplateModule::OnPostSaveWorld);
-		OpenedHandle = FEditorDelegates::OnMapOpened.AddRaw(this, &FAEWArenaTemplateModule::OnMapOpened);
-		if (!IsRunningCommandlet() && !GetDefault<UAEWArenaTemplateSettings>()->bExistingArenasConverted)
+		RemovedHandle = AssetRegistry.Get().OnAssetRemoved().AddRaw(this, &FAEWArenaMakerModule::OnAssetRemoved);
+		SaveHandle = FEditorDelegates::PostSaveWorld.AddRaw(this, &FAEWArenaMakerModule::OnPostSaveWorld);
+		OpenedHandle = FEditorDelegates::OnMapOpened.AddRaw(this, &FAEWArenaMakerModule::OnMapOpened);
+		if (!IsRunningCommandlet() && !GetDefault<UAEWArenaMakerSettings>()->bExistingArenasConverted)
 		{
-			PassTickHandle = FTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateRaw(this, &FAEWArenaTemplateModule::ProcessPass), 2.f);
+			PassTickHandle = FTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateRaw(this, &FAEWArenaMakerModule::ProcessPass), 2.f);
 		}
 	}
 
@@ -78,14 +78,14 @@ public:
 private:
 	void OnAssetRemoved(const FAssetData& Asset)
 	{
-		if (UAEWArenaTools::IsBusy() || Asset.AssetClass != UWorld::StaticClass()->GetFName() || !GetDefault<UAEWArenaTemplateSettings>()->bSyncOnDelete)
+		if (UAEWArenaTools::IsBusy() || Asset.AssetClass != UWorld::StaticClass()->GetFName() || !GetDefault<UAEWArenaMakerSettings>()->bSyncOnDelete)
 		{
 			return;
 		}
 		PendingLevels.Add(Asset.AssetName);
 		if (!TickHandle.IsValid())
 		{
-			TickHandle = FTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateRaw(this, &FAEWArenaTemplateModule::ProcessRemoved), 0.5f);
+			TickHandle = FTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateRaw(this, &FAEWArenaMakerModule::ProcessRemoved), 0.5f);
 		}
 	}
 
@@ -99,7 +99,7 @@ private:
 		{
 			return;
 		}
-		SwapTickHandle = FTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateRaw(this, &FAEWArenaTemplateModule::ProcessSwaps), 0.f);
+		SwapTickHandle = FTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateRaw(this, &FAEWArenaMakerModule::ProcessSwaps), 0.f);
 	}
 
 	void OnMapOpened(const FString& Filename, bool bAsTemplate)
@@ -108,7 +108,7 @@ private:
 		{
 			return;
 		}
-		OwnTickHandle = FTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateRaw(this, &FAEWArenaTemplateModule::ProcessOwn), 0.5f);
+		OwnTickHandle = FTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateRaw(this, &FAEWArenaMakerModule::ProcessOwn), 0.5f);
 	}
 
 	bool ProcessPass(float)
@@ -165,13 +165,13 @@ private:
 
 	TSharedRef<SDockTab> SpawnTab(const FSpawnTabArgs&)
 	{
-		return SNew(SDockTab).TabRole(ETabRole::NomadTab)[ SNew(SArenaTemplatePanel) ];
+		return SNew(SDockTab).TabRole(ETabRole::NomadTab)[ SNew(SArenaMakerPanel) ];
 	}
 
 	void RegisterMenus()
 	{
 		FToolMenuOwnerScoped OwnerScoped(this);
-		AEWMenus::AddToolEntry("OpenAEWArenaTemplate",
+		AEWMenus::AddToolEntry("OpenAEWArenaMaker",
 			LOCTEXT("OpenLabel", "Arena Maker"),
 			LOCTEXT("OpenTip", "Copy an imported arena template (map + its own sublevels) into a new arena and add it to the game's arena list."),
 			FUIAction(FExecuteAction::CreateStatic(&UAEWArenaTools::OpenDialog)));
@@ -229,6 +229,6 @@ private:
 	TSet<FName> PendingLevels;
 };
 
-IMPLEMENT_MODULE(FAEWArenaTemplateModule, AEWArenaTemplate)
+IMPLEMENT_MODULE(FAEWArenaMakerModule, AEWArenaMaker)
 
 #undef LOCTEXT_NAMESPACE

@@ -1,5 +1,5 @@
 #include "AEWArenaTools.h"
-#include "AEWArenaTemplateSettings.h"
+#include "AEWArenaMakerSettings.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Engine/Blueprint.h"
@@ -78,9 +78,9 @@ namespace
 	const FName CameraTableVar(TEXT("CameraTable"));
 	const FName TryApplyEvent(TEXT("TryApply"));
 
-	const UAEWArenaTemplateSettings* OvOverrideSettings()
+	const UAEWArenaMakerSettings* OvOverrideSettings()
 	{
-		return GetDefault<UAEWArenaTemplateSettings>();
+		return GetDefault<UAEWArenaMakerSettings>();
 	}
 
 	UClass* OvFindGameplayCameraClass()
@@ -945,7 +945,7 @@ bool UAEWArenaTools::PreviewGameplayCamera()
 	{
 		return false;
 	}
-	const UAEWArenaTemplateSettings* Settings = OvOverrideSettings();
+	const UAEWArenaMakerSettings* Settings = OvOverrideSettings();
 
 	UDataTable* Table = nullptr;
 	if (AActor* Override = OvFindActorOfClassName(World, TEXT("BP_CameraOverride_C")))

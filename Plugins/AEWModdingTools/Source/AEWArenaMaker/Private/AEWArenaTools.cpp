@@ -1,5 +1,5 @@
 #include "AEWArenaTools.h"
-#include "AEWArenaTemplateSettings.h"
+#include "AEWArenaMakerSettings.h"
 #include "AEWTableUtils.h"
 #include "AEWToolUI.h"
 #include "AEWPackaging.h"
@@ -79,9 +79,9 @@ DEFINE_LOG_CATEGORY_STATIC(LogAEWArena, Log, All);
 
 namespace
 {
-	const UAEWArenaTemplateSettings* Settings()
+	const UAEWArenaMakerSettings* Settings()
 	{
-		return GetDefault<UAEWArenaTemplateSettings>();
+		return GetDefault<UAEWArenaMakerSettings>();
 	}
 
 	FString ObjectPathOf(const FString& PackageName)
@@ -346,7 +346,7 @@ namespace
 
 	bool PrepareArenaTables(UDataTable*& OutTable, UDataTable*& OutNewRows)
 	{
-		const UAEWArenaTemplateSettings* S = Settings();
+		const UAEWArenaMakerSettings* S = Settings();
 		UDataTable* Table = LoadSetting<UDataTable>(S->ArenaTable);
 		UDataTable* NewRows = LoadSetting<UDataTable>(S->ArenaNewTable);
 		if (!Table || !Table->RowStruct)
@@ -397,7 +397,7 @@ namespace
 
 	int64 PickUnlockId(UDataTable* Unlock, UDataTable* BaseUnlock)
 	{
-		const UAEWArenaTemplateSettings* S = Settings();
+		const UAEWArenaMakerSettings* S = Settings();
 		TSet<int64> Used = AEWTables::CollectInts({ BaseUnlock, Unlock }, TEXT("UniqueID"));
 		if (Unlock)
 		{
@@ -415,7 +415,7 @@ namespace
 
 	int64 AddUnlockRow(const FString& DisplayName, int64 SourceItemId, TArray<UPackage*>& ToSave, TArray<UObject*>& Ship)
 	{
-		const UAEWArenaTemplateSettings* S = Settings();
+		const UAEWArenaMakerSettings* S = Settings();
 		UDataTable* Unlock = LoadSetting<UDataTable>(S->UnlockTable);
 		UDataTable* BaseUnlock = LoadSetting<UDataTable>(S->BaseUnlockTable);
 		if (!Unlock || !Unlock->GetRowStruct())
@@ -578,7 +578,7 @@ namespace
 
 	int32 FixLevelBlueprint(UWorld* World, const TMap<FString, FString>& Names, const TMap<FString, FString>& Packages)
 	{
-		if (!World || !World->PersistentLevel || !GetDefault<UAEWArenaTemplateSettings>()->bFixLevelBlueprints)
+		if (!World || !World->PersistentLevel || !GetDefault<UAEWArenaMakerSettings>()->bFixLevelBlueprints)
 		{
 			return 0;
 		}
@@ -721,7 +721,7 @@ namespace
 
 	bool ApplyDisplayName(UUserDefinedEnum* Enum, const UStruct* RS, uint8* Row, int64 ArenaId, FString Shown, bool bAdoptEnumText = false)
 	{
-		const UAEWArenaTemplateSettings* S = Settings();
+		const UAEWArenaMakerSettings* S = Settings();
 		if (!S->bLocalizedDisplayName || !Enum || !Row)
 		{
 			return false;
@@ -846,7 +846,7 @@ bool UAEWArenaTools::AllowCooking(const FString& PackageName)
 int32 UAEWArenaTools::RegisterArena(const FString& LevelName, const FString& CopyFromLevelName, const FString& DisplayName,
 	const FString& LabelFolder, int32 ChunkId, int32 ArenaId)
 {
-	const UAEWArenaTemplateSettings* S = Settings();
+	const UAEWArenaMakerSettings* S = Settings();
 	UUserDefinedEnum* Enum = LoadSetting<UUserDefinedEnum>(S->ArenaEnum);
 	if (!Enum)
 	{
@@ -1680,7 +1680,7 @@ namespace
 
 	int32 ApplyArenaChanges(const TArray<FName>& RowsToRemove, bool bRenumber)
 	{
-		const UAEWArenaTemplateSettings* S = Settings();
+		const UAEWArenaMakerSettings* S = Settings();
 		UUserDefinedEnum* Enum = LoadSetting<UUserDefinedEnum>(S->ArenaEnum);
 		UDataTable* Table = nullptr;
 		UDataTable* NewRows = nullptr;
@@ -1821,7 +1821,7 @@ namespace
 
 	int32 RepairArenaMaps(UDataTable* NewRows, const TSet<FName>& Existing)
 	{
-		const UAEWArenaTemplateSettings* S = Settings();
+		const UAEWArenaMakerSettings* S = Settings();
 		const UScriptStruct* RS = NewRows->GetRowStruct();
 		TGuardValue<bool> Busy(GArenaBusy, true);
 		TSet<FString> Used;
@@ -1917,7 +1917,7 @@ void UAEWArenaTools::HandleRemovedLevels(const TSet<FName>& Levels)
 	{
 		return;
 	}
-	const UAEWArenaTemplateSettings* S = Settings();
+	const UAEWArenaMakerSettings* S = Settings();
 	UDataTable* NewRows = LoadSetting<UDataTable>(S->ArenaNewTable);
 	if (!NewRows || !NewRows->GetRowStruct())
 	{
@@ -1949,7 +1949,7 @@ void UAEWArenaTools::HandleRemovedLevels(const TSet<FName>& Levels)
 
 int32 UAEWArenaTools::SyncArenaList(bool bRenumber, bool bAsk)
 {
-	const UAEWArenaTemplateSettings* S = Settings();
+	const UAEWArenaMakerSettings* S = Settings();
 	UDataTable* NewRows = LoadSetting<UDataTable>(S->ArenaNewTable);
 	if (!NewRows || !NewRows->GetRowStruct())
 	{
@@ -2069,12 +2069,12 @@ bool UAEWArenaTools::UnregisterArena(int32 ArenaId, bool bRenumber)
 
 void UAEWArenaTools::OpenDialog()
 {
-	FGlobalTabmanager::Get()->TryInvokeTab(FName(TEXT("AEWArenaTemplate")));
+	FGlobalTabmanager::Get()->TryInvokeTab(FName(TEXT("AEWArenaMaker")));
 }
 
 void UAEWArenaTools::OpenSettings()
 {
-	AEWToolUI::OpenSettings(GetDefault<UAEWArenaTemplateSettings>()->GetSectionName());
+	AEWToolUI::OpenSettings(GetDefault<UAEWArenaMakerSettings>()->GetSectionName());
 }
 
 void UAEWArenaTools::GetArenaList(TArray<FAEWArenaListEntry>& Out)
@@ -2801,7 +2801,7 @@ bool UAEWArenaTools::IsConvertingArenas()
 
 int32 UAEWArenaTools::ConvertExistingArenas()
 {
-	UAEWArenaTemplateSettings* S = GetMutableDefault<UAEWArenaTemplateSettings>();
+	UAEWArenaMakerSettings* S = GetMutableDefault<UAEWArenaMakerSettings>();
 	if (S->bExistingArenasConverted || GArenaBusy || GArenaPassQuiet || !GEditor || GEditor->PlayWorld)
 	{
 		return 0;

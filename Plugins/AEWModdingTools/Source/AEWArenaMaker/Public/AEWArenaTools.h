@@ -15,7 +15,7 @@ struct FAEWArenaListEntry
 };
 
 UCLASS()
-class AEWARENATEMPLATE_API UAEWArenaTools : public UBlueprintFunctionLibrary
+class AEWARENAMAKER_API UAEWArenaTools : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 

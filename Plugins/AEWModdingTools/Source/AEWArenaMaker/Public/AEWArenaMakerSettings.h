@@ -2,15 +2,15 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
-#include "AEWArenaTemplateSettings.generated.h"
+#include "AEWArenaMakerSettings.generated.h"
 
 UCLASS(config = Editor, defaultconfig, meta = (DisplayName = "Arena Maker"))
-class AEWARENATEMPLATE_API UAEWArenaTemplateSettings : public UDeveloperSettings
+class AEWARENAMAKER_API UAEWArenaMakerSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
 
 public:
-	UAEWArenaTemplateSettings();
+	UAEWArenaMakerSettings();
 
 	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
 

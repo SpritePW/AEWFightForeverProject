@@ -1,8 +1,8 @@
 using UnrealBuildTool;
 
-public class AEWArenaTemplate : ModuleRules
+public class AEWArenaMaker : ModuleRules
 {
-	public AEWArenaTemplate(ReadOnlyTargetRules Target) : base(Target)
+	public AEWArenaMaker(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "DeveloperSettings" });
