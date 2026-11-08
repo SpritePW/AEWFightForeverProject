@@ -3,6 +3,9 @@
 #include "CoreMinimal.h"
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/Views/SListView.h"
+#include "UObject/WeakObjectPtrTemplates.h"
+
+class UPrimaryAssetLabel;
 
 struct FChunkNameItem
 {
@@ -10,6 +13,7 @@ struct FChunkNameItem
 	FString Name;
 	FString Zip;
 	TArray<FString> Labels;
+	TArray<TWeakObjectPtr<UPrimaryAssetLabel>> LabelObjects;
 	TArray<FString> Assets;
 };
 
@@ -38,6 +42,7 @@ private:
 	FText GetStatusText() const;
 	TSharedRef<ITableRow> OnGenerateRow(TSharedPtr<FChunkNameItem> Item, const TSharedRef<STableViewBase>& Owner);
 	TSharedRef<ITableRow> OnGenerateAssetRow(TSharedPtr<FString> Item, const TSharedRef<STableViewBase>& Owner);
+	TSharedRef<ITableRow> OnGenerateLabelRow(TSharedPtr<TWeakObjectPtr<UPrimaryAssetLabel>> Item, const TSharedRef<STableViewBase>& Owner);
 
 	TArray<TSharedPtr<FChunkNameItem>> AllItems;
 	TArray<TSharedPtr<FChunkNameItem>> VisibleItems;
@@ -45,6 +50,8 @@ private:
 	TSharedPtr<FChunkNameItem> Selected;
 	TArray<TSharedPtr<FString>> SelectedAssets;
 	TSharedPtr<SListView<TSharedPtr<FString>>> AssetView;
+	TArray<TSharedPtr<TWeakObjectPtr<UPrimaryAssetLabel>>> SelectedLabels;
+	TSharedPtr<SListView<TSharedPtr<TWeakObjectPtr<UPrimaryAssetLabel>>>> LabelView;
 	FString FilterText;
 	FString OutputFolder;
 

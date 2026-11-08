@@ -56,7 +56,10 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Packaged Mods", meta = (DisplayName = "Output Folder", ToolTip = "Where the archives go. Defaults to a Mods folder inside the package folder."))
 	FDirectoryPath PackagedModsFolder;
 
-	UPROPERTY(EditAnywhere, config, Category = "Packaged Mods", meta = (DisplayName = "Rename And Archive Automatically"))
-	bool bProcessPackagedChunks = true;
+	UPROPERTY(EditAnywhere, config, Category = "Packaged Mods", meta = (DisplayName = "Rename Automatically", ToolTip = "Rename chunks to their file names after packaging."))
+	bool bRenamePackagedChunks = true;
+
+	UPROPERTY(EditAnywhere, config, Category = "Packaged Mods", meta = (DisplayName = "Archive Automatically", ToolTip = "Put chunks into their archives after packaging."))
+	bool bArchivePackagedChunks = true;
 
 };

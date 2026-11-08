@@ -4,6 +4,7 @@
 #include "AEWToolUI.h"
 #include "AssetRegistryModule.h"
 #include "Engine/PrimaryAssetLabel.h"
+#include "FileHelpers.h"
 #include "Framework/Docking/TabManager.h"
 #include "HAL/PlatformTime.h"
 #include "Misc/PackageName.h"
@@ -30,6 +31,60 @@ namespace ChunkNameColumns
 	static const FName Name(TEXT("Name"));
 	static const FName Zip(TEXT("Zip"));
 	static const FName Assets(TEXT("Assets"));
+	static const FName Cook(TEXT("Cook"));
+}
+
+static bool IsCooked(const UPrimaryAssetLabel* Label)
+{
+	return Label && Label->Rules.CookRule != EPrimaryAssetCookRule::NeverCook && Label->Rules.CookRule != EPrimaryAssetCookRule::DevelopmentCook;
+}
+
+static ECheckBoxState ChunkCookState(const FChunkNameItem& I)
+{
+	int32 On = 0;
+	int32 All = 0;
+	for (const TWeakObjectPtr<UPrimaryAssetLabel>& L : I.LabelObjects)
+	{
+		if (L.IsValid())
+		{
+			++All;
+			On += IsCooked(L.Get()) ? 1 : 0;
+		}
+	}
+	return On == 0 ? ECheckBoxState::Unchecked : (On == All ? ECheckBoxState::Checked : ECheckBoxState::Undetermined);
+}
+
+static void SetCooked(const TArray<UPrimaryAssetLabel*>& Labels, bool bCook)
+{
+	TArray<UPackage*> ToSave;
+	for (UPrimaryAssetLabel* Label : Labels)
+	{
+		if (!Label || IsCooked(Label) == bCook)
+		{
+			continue;
+		}
+		Label->Modify();
+		Label->Rules.CookRule = bCook ? EPrimaryAssetCookRule::AlwaysCook : EPrimaryAssetCookRule::DevelopmentCook;
+		Label->MarkPackageDirty();
+		ToSave.AddUnique(Label->GetOutermost());
+	}
+	if (ToSave.Num() > 0)
+	{
+		UEditorLoadingAndSavingUtils::SavePackages(ToSave, false);
+	}
+}
+
+static void SetChunkCooked(const FChunkNameItem& I, bool bCook)
+{
+	TArray<UPrimaryAssetLabel*> Labels;
+	for (const TWeakObjectPtr<UPrimaryAssetLabel>& L : I.LabelObjects)
+	{
+		if (L.IsValid())
+		{
+			Labels.Add(L.Get());
+		}
+	}
+	SetCooked(Labels, bCook);
 }
 
 static FString EffectiveZip(const FChunkNameItem& I)
@@ -70,6 +125,13 @@ public:
 	virtual TSharedRef<SWidget> GenerateWidgetForColumn(const FName& Column) override
 	{
 		TSharedPtr<FChunkNameItem> I = Item;
+		if (Column == ChunkNameColumns::Cook)
+		{
+			return SNew(SCheckBox)
+				.ToolTipText(LOCTEXT("CookColumnTip", "Cook and package this chunk."))
+				.IsChecked_Lambda([I]() { return ChunkCookState(*I); })
+				.OnCheckStateChanged_Lambda([I](ECheckBoxState State) { SetChunkCooked(*I, State == ECheckBoxState::Checked); });
+		}
 		if (Column == ChunkNameColumns::Chunk)
 		{
 			return SNew(STextBlock).Text(FText::FromString(FString::Printf(TEXT("pakchunk%d"), I->Chunk)));
@@ -137,6 +199,7 @@ void SChunkNamesPanel::Construct(const FArguments& InArgs)
 			.HeaderRow
 			(
 				SNew(SHeaderRow)
+				+ SHeaderRow::Column(ChunkNameColumns::Cook).DefaultLabel(LOCTEXT("ColCook", "Cook")).FixedWidth(44.f)
 				+ SHeaderRow::Column(ChunkNameColumns::Chunk).DefaultLabel(LOCTEXT("ColChunk", "Chunk")).FillWidth(0.2f)
 				+ SHeaderRow::Column(ChunkNameColumns::Name).DefaultLabel(LOCTEXT("ColName", "File name")).FillWidth(0.35f)
 				+ SHeaderRow::Column(ChunkNameColumns::Zip).DefaultLabel(LOCTEXT("ColZip", "Zip")).FillWidth(0.33f)
@@ -183,6 +246,18 @@ void SChunkNamesPanel::Construct(const FArguments& InArgs)
 
 		+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 6)
 		[
+			AEWToolUI::MakeSection(LOCTEXT("LabelsSection", "Labels in this chunk"),
+				SNew(SBox).MaxDesiredHeight(200.f)
+				[
+					SAssignNew(LabelView, SListView<TSharedPtr<TWeakObjectPtr<UPrimaryAssetLabel>>>)
+					.ListItemsSource(&SelectedLabels)
+					.SelectionMode(ESelectionMode::None)
+					.OnGenerateRow(this, &SChunkNamesPanel::OnGenerateLabelRow)
+				])
+		]
+
+		+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 6)
+		[
 			AEWToolUI::MakeSection(LOCTEXT("AssetsSection", "Assets in this chunk"),
 				SNew(SBox).MinDesiredHeight(120.f).MaxDesiredHeight(320.f)
 				[
@@ -216,18 +291,36 @@ void SChunkNamesPanel::Construct(const FArguments& InArgs)
 				+ SVerticalBox::Slot().AutoHeight()
 				[
 					AEWToolUI::MakeRow(LOCTEXT("Auto", "After packaging"),
-						SNew(SCheckBox)
-						.IsChecked_Lambda([]() { return AEWPackaging::Settings()->bProcessPackagedChunks ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
-						.OnCheckStateChanged_Lambda([this](ECheckBoxState State)
-						{
-							UAEWModdingSettings* S = GetMutableDefault<UAEWModdingSettings>();
-							S->bProcessPackagedChunks = State == ECheckBoxState::Checked;
-							Save();
-						})
+						SNew(SVerticalBox)
+						+ SVerticalBox::Slot().AutoHeight()
 						[
-							SNew(STextBlock).Text(LOCTEXT("AutoText", "Rename and archive automatically"))
+							SNew(SCheckBox)
+							.IsChecked_Lambda([]() { return AEWPackaging::Settings()->bRenamePackagedChunks ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+							.OnCheckStateChanged_Lambda([this](ECheckBoxState State)
+							{
+								GetMutableDefault<UAEWModdingSettings>()->bRenamePackagedChunks = State == ECheckBoxState::Checked;
+								Save();
+							})
+							.ToolTipText(LOCTEXT("RenameTip", "Rename chunks to their file names."))
+							[
+								SNew(STextBlock).Text(LOCTEXT("RenameText", "Rename automatically"))
+							]
+						]
+						+ SVerticalBox::Slot().AutoHeight().Padding(0, 2, 0, 0)
+						[
+							SNew(SCheckBox)
+							.IsChecked_Lambda([]() { return AEWPackaging::Settings()->bArchivePackagedChunks ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+							.OnCheckStateChanged_Lambda([this](ECheckBoxState State)
+							{
+								GetMutableDefault<UAEWModdingSettings>()->bArchivePackagedChunks = State == ECheckBoxState::Checked;
+								Save();
+							})
+							.ToolTipText(LOCTEXT("ArchiveTip", "Put chunks into their archives."))
+							[
+								SNew(STextBlock).Text(LOCTEXT("ArchiveText", "Archive automatically"))
+							]
 						],
-						LOCTEXT("AutoTip", "Rename and archive after every package."))
+						LOCTEXT("AutoTip", "Packaged chunks are moved out of the build into the output folder."))
 				])
 		]
 
@@ -316,6 +409,7 @@ void SChunkNamesPanel::Refresh()
 			Item->Chunk = Chunk;
 		}
 		Item->Labels.Add(A.AssetName.ToString());
+		Item->LabelObjects.Add(Label);
 		TSet<FString>& Set = Assets.FindOrAdd(Chunk);
 		if (Label->bLabelAssetsInMyDirectory)
 		{
@@ -405,8 +499,13 @@ void SChunkNamesPanel::Select(TSharedPtr<FChunkNameItem> Item)
 {
 	Selected = Item;
 	SelectedAssets.Reset();
+	SelectedLabels.Reset();
 	if (Item.IsValid())
 	{
+		for (const TWeakObjectPtr<UPrimaryAssetLabel>& L : Item->LabelObjects)
+		{
+			SelectedLabels.Add(MakeShared<TWeakObjectPtr<UPrimaryAssetLabel>>(L));
+		}
 		for (const FString& Asset : Item->Assets)
 		{
 			SelectedAssets.Add(MakeShared<FString>(Asset));
@@ -415,6 +514,10 @@ void SChunkNamesPanel::Select(TSharedPtr<FChunkNameItem> Item)
 	if (AssetView.IsValid())
 	{
 		AssetView->RequestListRefresh();
+	}
+	if (LabelView.IsValid())
+	{
+		LabelView->RequestListRefresh();
 	}
 }
 
@@ -488,13 +591,43 @@ FText SChunkNamesPanel::GetStatusText() const
 		Named += Item->Name.TrimStartAndEnd().IsEmpty() ? 0 : 1;
 	}
 	const FString Folder = OutputFolder.TrimStartAndEnd().IsEmpty() ? FString(TEXT("Mods inside the packaging folder")) : OutputFolder.TrimStartAndEnd();
-	return FText::FromString(FString::Printf(TEXT("%d chunks, %d named    Output: %s    After packaging: %s"),
-		AllItems.Num(), Named, *Folder, AEWPackaging::Settings()->bProcessPackagedChunks ? TEXT("rename and archive") : TEXT("off")));
+	const bool bRename = AEWPackaging::Settings()->bRenamePackagedChunks;
+	const bool bArchive = AEWPackaging::Settings()->bArchivePackagedChunks;
+	const TCHAR* After = bRename ? (bArchive ? TEXT("rename and archive") : TEXT("rename")) : (bArchive ? TEXT("archive") : TEXT("off"));
+	int32 Cooked = 0;
+	for (const TSharedPtr<FChunkNameItem>& Item : AllItems)
+	{
+		Cooked += ChunkCookState(*Item) != ECheckBoxState::Unchecked ? 1 : 0;
+	}
+	return FText::FromString(FString::Printf(TEXT("%d chunks, %d cooked, %d named    Output: %s    After packaging: %s"),
+		AllItems.Num(), Cooked, Named, *Folder, After));
 }
 
 TSharedRef<ITableRow> SChunkNamesPanel::OnGenerateRow(TSharedPtr<FChunkNameItem> Item, const TSharedRef<STableViewBase>& Owner)
 {
 	return SNew(SChunkNameRow, Owner, Item);
+}
+
+TSharedRef<ITableRow> SChunkNamesPanel::OnGenerateLabelRow(TSharedPtr<TWeakObjectPtr<UPrimaryAssetLabel>> Item, const TSharedRef<STableViewBase>& Owner)
+{
+	const TWeakObjectPtr<UPrimaryAssetLabel> Label = *Item;
+	return SNew(STableRow<TSharedPtr<TWeakObjectPtr<UPrimaryAssetLabel>>>, Owner)
+		[
+			SNew(SCheckBox)
+			.ToolTipText(LOCTEXT("CookLabelTip", "Cook and package this label."))
+			.IsChecked_Lambda([Label]() { return IsCooked(Label.Get()) ? ECheckBoxState::Checked : ECheckBoxState::Unchecked; })
+			.OnCheckStateChanged_Lambda([Label](ECheckBoxState State)
+			{
+				if (Label.IsValid())
+				{
+					SetCooked({ Label.Get() }, State == ECheckBoxState::Checked);
+				}
+			})
+			[
+				SNew(STextBlock).Text(FText::FromString(Label.IsValid() ? Label->GetName() : FString()))
+				.ToolTipText(FText::FromString(Label.IsValid() ? Label->GetPathName() : FString()))
+			]
+		];
 }
 
 TSharedRef<ITableRow> SChunkNamesPanel::OnGenerateAssetRow(TSharedPtr<FString> Item, const TSharedRef<STableViewBase>& Owner)

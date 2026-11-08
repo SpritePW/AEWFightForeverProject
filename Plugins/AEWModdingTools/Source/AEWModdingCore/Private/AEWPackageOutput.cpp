@@ -1,5 +1,7 @@
 #include "AEWPackaging.h"
 #include "AEWModdingSettings.h"
+#include "AssetRegistryModule.h"
+#include "Engine/PrimaryAssetLabel.h"
 #include "FileUtilities/ZipArchiveWriter.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformFileManager.h"
@@ -111,6 +113,41 @@ namespace AEWPackaging
 		return Tail(Path, 400).Contains(TEXT("ExitCode=0 (Success)"));
 	}
 
+	FString OutputFolderFor(const FString& PackageFolder)
+	{
+		FString OutDir = Settings()->PackagedModsFolder.Path.TrimStartAndEnd();
+		if (OutDir.IsEmpty())
+		{
+			OutDir = PackageFolder.IsEmpty() ? FPaths::ProjectSavedDir() / TEXT("PackagedMods") : PackageFolder / TEXT("Mods");
+		}
+		return FPaths::ConvertRelativePathToFull(OutDir);
+	}
+
+	static FString NewestPaksFolder(const FString& Root, const FString& Skip)
+	{
+		TArray<FString> Found;
+		IFileManager::Get().FindFilesRecursive(Found, *Root, TEXT("pakchunk*"), true, false);
+		FString PaksDir;
+		FDateTime Newest = FDateTime::MinValue();
+		const FString SkipDir = FPaths::ConvertRelativePathToFull(Skip);
+		for (const FString& File : Found)
+		{
+			int32 Chunk = 0;
+			const FString Dir = FPaths::ConvertRelativePathToFull(FPaths::GetPath(File));
+			if (!ParseChunkFile(FPaths::GetCleanFilename(File), Chunk) || (!SkipDir.IsEmpty() && FPaths::IsUnderDirectory(Dir, SkipDir)))
+			{
+				continue;
+			}
+			const FDateTime T = IFileManager::Get().GetTimeStamp(*File);
+			if (T > Newest)
+			{
+				Newest = T;
+				PaksDir = Dir;
+			}
+		}
+		return PaksDir;
+	}
+
 	int32 ProcessLastPackage(TArray<FString>& Log)
 	{
 		const FString UatLog = UatLogPath();
@@ -139,38 +176,52 @@ namespace AEWPackaging
 		{
 			StageDir = FPaths::ProjectSavedDir() / TEXT("StagedBuilds");
 		}
-		TArray<FString> Found;
-		IFileManager::Get().FindFilesRecursive(Found, *StageDir, TEXT("pakchunk*"), true, false);
-		FString PaksDir;
-		FDateTime Newest = FDateTime::MinValue();
-		for (const FString& File : Found)
+		const FString OutDir = OutputFolderFor(ArchiveDir);
+		FString PaksDir = ArchiveDir.IsEmpty() ? FString() : NewestPaksFolder(ArchiveDir, OutDir);
+		const bool bMove = !PaksDir.IsEmpty();
+		if (!bMove)
 		{
-			const FDateTime T = IFileManager::Get().GetTimeStamp(*File);
-			if (T > Newest)
-			{
-				Newest = T;
-				PaksDir = FPaths::GetPath(File);
-			}
+			PaksDir = NewestPaksFolder(StageDir, OutDir);
 		}
 		if (PaksDir.IsEmpty())
 		{
-			Log.Add(TEXT("No pakchunk files found under ") + StageDir);
+			Log.Add(TEXT("No pakchunk files found under ") + (ArchiveDir.IsEmpty() ? StageDir : ArchiveDir));
 			return -1;
 		}
-		return ProcessPackagedChunks(PaksDir, ArchiveDir, Log);
+		return ProcessPackagedChunks(PaksDir, ArchiveDir, Log, bMove);
 	}
 
-	int32 ProcessPackagedChunks(const FString& PaksFolder, const FString& PackageFolder, TArray<FString>& Log)
+	static TSet<int32> ChunksNotCooked()
+	{
+		TSet<int32> Labelled;
+		TSet<int32> Cooked;
+		IAssetRegistry& Registry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
+		TArray<FAssetData> Labels;
+		Registry.GetAssetsByClass(UPrimaryAssetLabel::StaticClass()->GetFName(), Labels, true);
+		for (const FAssetData& A : Labels)
+		{
+			const UPrimaryAssetLabel* Label = Cast<UPrimaryAssetLabel>(A.GetAsset());
+			if (!Label || Label->Rules.ChunkId <= 0)
+			{
+				continue;
+			}
+			Labelled.Add(Label->Rules.ChunkId);
+			if (Label->Rules.CookRule != EPrimaryAssetCookRule::NeverCook && Label->Rules.CookRule != EPrimaryAssetCookRule::DevelopmentCook)
+			{
+				Cooked.Add(Label->Rules.ChunkId);
+			}
+		}
+		return Labelled.Difference(Cooked);
+	}
+
+	int32 ProcessPackagedChunks(const FString& PaksFolder, const FString& PackageFolder, TArray<FString>& Log, bool bMove)
 	{
 		const UAEWModdingSettings* S = Settings();
 		IFileManager& FM = IFileManager::Get();
+		const bool bRename = S->bRenamePackagedChunks;
+		const bool bArchive = S->bArchivePackagedChunks;
 
-		FString OutDir = S->PackagedModsFolder.Path.TrimStartAndEnd();
-		if (OutDir.IsEmpty())
-		{
-			OutDir = (PackageFolder.IsEmpty() ? FPaths::ProjectSavedDir() / TEXT("PackagedMods") : PackageFolder / TEXT("Mods"));
-		}
-		OutDir = FPaths::ConvertRelativePathToFull(OutDir);
+		const FString OutDir = OutputFolderFor(PackageFolder);
 		FM.MakeDirectory(*OutDir, true);
 
 		TArray<FString> Files;
@@ -185,9 +236,13 @@ namespace AEWPackaging
 			}
 		}
 
+		const TSet<int32> Skip = ChunksNotCooked();
+		TSet<int32> Skipped;
+
 		TMap<FString, TArray<FString>> Zips;
-		TSet<int32> Unnamed;
+		TArray<FString> Loose;
 		TSet<int32> Done;
+		int32 Removed = 0;
 		for (const FString& File : Files)
 		{
 			int32 Chunk = 0;
@@ -195,77 +250,103 @@ namespace AEWPackaging
 			{
 				continue;
 			}
-			const FAEWChunkOutput* const* Found = Names.Find(Chunk);
-			const FString Name = Found ? (*Found)->Name : FString();
-			const FString ZipName = Found && !(*Found)->Zip.IsEmpty() ? (*Found)->Zip : (Name.IsEmpty() ? FString::Printf(TEXT("pakchunk%d"), Chunk) : Name);
-			if (Name.IsEmpty())
+			if (Skip.Contains(Chunk))
 			{
-				Unnamed.Add(Chunk);
-			}
-			const FString Base = Name.IsEmpty() ? FPaths::GetBaseFilename(File) : (Name.EndsWith(TEXT("_P")) ? Name : Name + TEXT("_P"));
-			const FString Target = OutDir / Base + TEXT(".") + FPaths::GetExtension(File);
-			if (FM.Copy(*Target, *(PaksFolder / File), true, true) != COPY_OK)
-			{
-				Log.Add(FString::Printf(TEXT("warning: could not copy %s to %s"), *File, *Target));
+				Skipped.Add(Chunk);
 				continue;
 			}
-			Zips.FindOrAdd(ZipName).Add(Target);
-			if (!Done.Contains(Chunk))
+			const FAEWChunkOutput* const* Found = Names.Find(Chunk);
+			const FString Name = bRename && Found ? (*Found)->Name : FString();
+			const FString ZipName = Found && !(*Found)->Zip.IsEmpty() ? (*Found)->Zip
+				: (Found && !(*Found)->Name.IsEmpty() ? (*Found)->Name : FString::Printf(TEXT("pakchunk%d"), Chunk));
+			const FString Base = Name.IsEmpty() ? FPaths::GetBaseFilename(File) : (Name.EndsWith(TEXT("_P")) ? Name : Name + TEXT("_P"));
+			const FString Source = PaksFolder / File;
+			const FString Target = OutDir / Base + TEXT(".") + FPaths::GetExtension(File);
+			FM.Delete(*Target, false, true, true);
+			const bool bOk = bMove ? FM.Move(*Target, *Source, true, true) : FM.Copy(*Target, *Source, true, true) == COPY_OK;
+			if (!bOk)
 			{
-				Done.Add(Chunk);
+				Log.Add(FString::Printf(TEXT("warning: could not %s %s to %s"), bMove ? TEXT("move") : TEXT("copy"), *File, *Target));
+				continue;
 			}
+			if (bMove)
+			{
+				++Removed;
+			}
+			Zips.FindOrAdd(ZipName).Add(Target);
+			Loose.Add(Target);
+			Done.Add(Chunk);
 		}
 
 		TArray<FString> ZipNames;
-		Zips.GetKeys(ZipNames);
-		ZipNames.Sort();
-		for (const FString& ZipName : ZipNames)
+		if (bArchive)
 		{
-			TArray<FString>& Members = Zips[ZipName];
-			Members.Sort();
-			const FString ZipPath = OutDir / ZipName + TEXT(".zip");
-			FM.Delete(*ZipPath, false, true, true);
-			IFileHandle* Handle = FPlatformFileManager::Get().GetPlatformFile().OpenWrite(*ZipPath);
-			if (!Handle)
+			Zips.GetKeys(ZipNames);
+			ZipNames.Sort();
+			for (const FString& ZipName : ZipNames)
 			{
-				Log.Add(TEXT("warning: could not write ") + ZipPath);
-				continue;
-			}
-			{
-				FZipArchiveWriter Zip(Handle);
-				for (const FString& Member : Members)
+				TArray<FString>& Members = Zips[ZipName];
+				Members.Sort();
+				const FString ZipPath = OutDir / ZipName + TEXT(".zip");
+				FM.Delete(*ZipPath, false, true, true);
+				IFileHandle* Handle = FPlatformFileManager::Get().GetPlatformFile().OpenWrite(*ZipPath);
+				if (!Handle)
 				{
-					TArray<uint8> Data;
-					if (FFileHelper::LoadFileToArray(Data, *Member))
+					Log.Add(TEXT("warning: could not write ") + ZipPath);
+					continue;
+				}
+				bool bAll = true;
+				{
+					FZipArchiveWriter Zip(Handle);
+					for (const FString& Member : Members)
 					{
-						Zip.AddFile(FPaths::GetCleanFilename(Member), Data, FM.GetTimeStamp(*Member));
-					}
-					else
-					{
-						Log.Add(TEXT("warning: could not read ") + Member);
+						TArray<uint8> Data;
+						if (FFileHelper::LoadFileToArray(Data, *Member))
+						{
+							Zip.AddFile(FPaths::GetCleanFilename(Member), Data, FM.GetTimeStamp(*Member));
+						}
+						else
+						{
+							bAll = false;
+							Log.Add(TEXT("warning: could not read ") + Member);
+						}
 					}
 				}
+				TArray<FString> Short;
+				for (const FString& Member : Members)
+				{
+					Short.Add(FPaths::GetCleanFilename(Member));
+					if (bAll)
+					{
+						FM.Delete(*Member, false, true, true);
+						Loose.Remove(Member);
+					}
+				}
+				Log.Add(FString::Printf(TEXT("%s.zip: %s"), *ZipName, *FString::Join(Short, TEXT(", "))));
 			}
-			TArray<FString> Short;
-			for (const FString& Member : Members)
-			{
-				Short.Add(FPaths::GetCleanFilename(Member));
-			}
-			Log.Add(FString::Printf(TEXT("%s.zip: %s"), *ZipName, *FString::Join(Short, TEXT(", "))));
 		}
-
-		TArray<int32> UnnamedList = Unnamed.Array();
-		UnnamedList.Sort();
-		if (UnnamedList.Num() > 0)
+		for (const FString& File : Loose)
 		{
-			TArray<FString> Ids;
-			for (int32 Id : UnnamedList)
-			{
-				Ids.Add(FString::Printf(TEXT("pakchunk%d"), Id));
-			}
-			Log.Add(TEXT("Kept their pakchunk names (no file name set): ") + FString::Join(Ids, TEXT(", ")));
+			Log.Add(TEXT("File: ") + FPaths::GetCleanFilename(File));
 		}
-		Log.Insert(FString::Printf(TEXT("Packaged mods: %d chunk(s) into %d zip(s) in %s"), Done.Num(), ZipNames.Num(), *OutDir), 0);
+		if (Removed > 0)
+		{
+			Log.Add(FString::Printf(TEXT("Moved %d file(s) out of %s"), Removed, *PaksFolder));
+		}
+		if (Skipped.Num() > 0)
+		{
+			TArray<int32> List = Skipped.Array();
+			List.Sort();
+			TArray<FString> Ids;
+			for (int32 Id : List)
+			{
+				Ids.Add(FString::FromInt(Id));
+			}
+			Log.Add(TEXT("Left in place (not cooked): chunk ") + FString::Join(Ids, TEXT(", ")));
+		}
+		Log.Insert(bArchive
+			? FString::Printf(TEXT("Packaged mods: %d chunk(s) into %d archive(s) in %s"), Done.Num(), ZipNames.Num(), *OutDir)
+			: FString::Printf(TEXT("Packaged mods: %d chunk(s) in %s"), Done.Num(), *OutDir), 0);
 		FFileHelper::SaveStringArrayToFile(Log, *(OutDir / TEXT("PackagedMods.txt")));
 		return Done.Num();
 	}
