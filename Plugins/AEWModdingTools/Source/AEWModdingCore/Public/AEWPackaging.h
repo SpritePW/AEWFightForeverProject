@@ -23,6 +23,8 @@ namespace AEWPackaging
 
 	AEWMODDINGCORE_API int32 ProcessLastPackage(TArray<FString>& Log);
 
+	AEWMODDINGCORE_API bool PackageProject();
+
 	AEWMODDINGCORE_API int32 ProcessPackagedChunks(const FString& PaksFolder, const FString& PackageFolder, TArray<FString>& Log);
 
 	AEWMODDINGCORE_API int32 NextFreeChunkId();

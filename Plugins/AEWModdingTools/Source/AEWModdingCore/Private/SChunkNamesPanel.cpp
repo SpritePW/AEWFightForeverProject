@@ -104,17 +104,18 @@ void SChunkNamesPanel::Construct(const FArguments& InArgs)
 		SNew(SHorizontalBox)
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)
 		[
-			AEWToolUI::MakePrimaryButton(LOCTEXT("ProcessNow", "Export Mods"),
-				LOCTEXT("ProcessNowTip", "Rename and archive the chunks from the last packaged build. Also runs automatically after every Package Project."),
-				[this]() { ProcessNow(); })
+			AEWToolUI::MakePrimaryButton(LOCTEXT("Package", "Package Project"),
+				LOCTEXT("PackageTip", "Package for Windows (64-bit) using the project's packaging settings."),
+				[this]() { Save(); AEWPackaging::PackageProject(); })
 		]
+
 		+ SHorizontalBox::Slot().FillWidth(1.f)
 		[
 			SNullWidget::NullWidget
 		]
 		+ SHorizontalBox::Slot().AutoWidth().Padding(16, 0, 0, 0)
 		[
-			AEWToolUI::MakeButton(LOCTEXT("Settings", "Settings..."), LOCTEXT("SettingsTip", "Project Settings > Plugins > AEW Modding Tools"),
+			AEWToolUI::MakeButton(LOCTEXT("Settings", "Settings..."), LOCTEXT("SettingsTip", "Open the plugin settings."),
 				[]() { AEWToolUI::OpenSettings(TEXT("AEWModdingSettings")); })
 		],
 		TAttribute<FText>::Create(TAttribute<FText>::FGetter::CreateSP(this, &SChunkNamesPanel::GetStatusText)));
@@ -170,18 +171,14 @@ void SChunkNamesPanel::Construct(const FArguments& InArgs)
 				+ SVerticalBox::Slot().AutoHeight()
 				[
 					AEWToolUI::MakeRow(LOCTEXT("FileName", "File name"), Field(&FChunkNameItem::Name),
-						LOCTEXT("FileNameTip", "The chunk's .pak/.ucas/.utoc are copied as <name>_P.*. Names are per chunk, because several labels can share one chunk."))
+						LOCTEXT("FileNameTip", "Name the mod is shipped under. _P is added."))
 				]
 				+ SVerticalBox::Slot().AutoHeight()
 				[
 					AEWToolUI::MakeRow(LOCTEXT("ZipName", "Zip"), Field(&FChunkNameItem::Zip),
-						LOCTEXT("ZipTip", "Chunks with the same zip name are packed into one zip."))
+						LOCTEXT("ZipTip", "Chunks with the same zip name share one archive."))
 				]
-				+ SVerticalBox::Slot().AutoHeight()
-				[
-					AEWToolUI::MakeRow(FText::GetEmpty(),
-						SNew(STextBlock).AutoWrapText(true).ColorAndOpacity(FSlateColor::UseSubduedForeground()).Text(this, &SChunkNamesPanel::GetPreviewText))
-				])
+)
 		]
 
 		+ SVerticalBox::Slot().AutoHeight().Padding(0, 0, 0, 6)
@@ -213,7 +210,7 @@ void SChunkNamesPanel::Construct(const FArguments& InArgs)
 						]
 						+ SHorizontalBox::Slot().AutoWidth()
 						[
-							AEWToolUI::MakeButton(LOCTEXT("Browse", "..."), LOCTEXT("BrowseTip", "Pick the output folder"), [this]() { BrowseFolder(); })
+							AEWToolUI::MakeButton(LOCTEXT("Browse", "..."), LOCTEXT("BrowseTip", "Choose a folder."), [this]() { BrowseFolder(); })
 						])
 				]
 				+ SVerticalBox::Slot().AutoHeight()
@@ -230,7 +227,7 @@ void SChunkNamesPanel::Construct(const FArguments& InArgs)
 						[
 							SNew(STextBlock).Text(LOCTEXT("AutoText", "Rename and archive automatically"))
 						],
-						LOCTEXT("AutoTip", "When Package Project finishes, rename and archive the chunks without asking."))
+						LOCTEXT("AutoTip", "Rename and archive after every package."))
 				])
 		]
 
@@ -478,17 +475,6 @@ void SChunkNamesPanel::BrowseFolder()
 	}
 }
 
-void SChunkNamesPanel::ProcessNow()
-{
-	Save();
-	TArray<FString> Log;
-	AEWPackaging::ProcessLastPackage(Log);
-	for (const FString& Line : Log)
-	{
-		AddLog(Line);
-	}
-}
-
 void SChunkNamesPanel::AddLog(const FString& Line)
 {
 	LogText += Line + TEXT("\n");
@@ -504,29 +490,6 @@ FText SChunkNamesPanel::GetStatusText() const
 	const FString Folder = OutputFolder.TrimStartAndEnd().IsEmpty() ? FString(TEXT("Mods inside the packaging folder")) : OutputFolder.TrimStartAndEnd();
 	return FText::FromString(FString::Printf(TEXT("%d chunks, %d named    Output: %s    After packaging: %s"),
 		AllItems.Num(), Named, *Folder, AEWPackaging::Settings()->bProcessPackagedChunks ? TEXT("rename and archive") : TEXT("off")));
-}
-
-FText SChunkNamesPanel::GetPreviewText() const
-{
-	if (!Selected.IsValid())
-	{
-		return FText::GetEmpty();
-	}
-	const FString Zip = EffectiveZip(*Selected);
-	TArray<FString> Sharing;
-	for (const TSharedPtr<FChunkNameItem>& Item : AllItems)
-	{
-		if (Item != Selected && EffectiveZip(*Item) == Zip)
-		{
-			Sharing.Add(FString::Printf(TEXT("pakchunk%d"), Item->Chunk));
-		}
-	}
-	FString Text = FString::Printf(TEXT("pakchunk%d-WindowsNoEditor.* -> %s.pak/.ucas/.utoc in %s.zip"), Selected->Chunk, *EffectiveFile(*Selected), *Zip);
-	if (Sharing.Num() > 0)
-	{
-		Text += TEXT(" (shared with ") + FString::Join(Sharing, TEXT(", ")) + TEXT(")");
-	}
-	return FText::FromString(Text);
 }
 
 TSharedRef<ITableRow> SChunkNamesPanel::OnGenerateRow(TSharedPtr<FChunkNameItem> Item, const TSharedRef<STableViewBase>& Owner)

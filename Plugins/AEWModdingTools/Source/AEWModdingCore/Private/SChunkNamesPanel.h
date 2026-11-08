@@ -33,11 +33,9 @@ private:
 	void ApplyFilter();
 	void Select(TSharedPtr<FChunkNameItem> Item);
 	void Save();
-	void ProcessNow();
 	void BrowseFolder();
 	void AddLog(const FString& Line);
 	FText GetStatusText() const;
-	FText GetPreviewText() const;
 	TSharedRef<ITableRow> OnGenerateRow(TSharedPtr<FChunkNameItem> Item, const TSharedRef<STableViewBase>& Owner);
 	TSharedRef<ITableRow> OnGenerateAssetRow(TSharedPtr<FString> Item, const TSharedRef<STableViewBase>& Owner);
 

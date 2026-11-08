@@ -1,6 +1,7 @@
 #include "Modules/ModuleManager.h"
 #include "Misc/MessageDialog.h"
 #include "ToolMenus.h"
+#include "EditorStyleSet.h"
 #include "AEWPackaging.h"
 #include "AEWTableUtils.h"
 #include "AEWModdingSettings.h"
@@ -38,8 +39,8 @@ public:
 		UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FAEWModdingCoreModule::RegisterMenus));
 		FGlobalTabmanager::Get()->RegisterNomadTabSpawner(SChunkNamesPanel::TabName,
 			FOnSpawnTab::CreateLambda([](const FSpawnTabArgs&) { return SNew(SDockTab).TabRole(ETabRole::NomadTab)[ SNew(SChunkNamesPanel) ]; }))
-			.SetDisplayName(LOCTEXT("ChunkNamesTab", "Name Chunks"))
-			.SetTooltipText(LOCTEXT("ChunkNamesTabTip", "Name each chunk's packaged files and zip"))
+			.SetDisplayName(LOCTEXT("ChunkNamesTab", "Package Project"))
+			.SetTooltipText(LOCTEXT("ChunkNamesTabTip", "Package the project and archive its chunks."))
 			.SetMenuType(ETabSpawnerMenuType::Hidden);
 
 		FCookModificationDelegate& Cook = FGameDelegates::Get().GetCookModificationDelegate();
@@ -86,6 +87,11 @@ public:
 			FTicker::GetCoreTicker().RemoveTicker(WatchHandle);
 			WatchHandle.Reset();
 		}
+		if (MenuRetryHandle.IsValid())
+		{
+			FTicker::GetCoreTicker().RemoveTicker(MenuRetryHandle);
+			MenuRetryHandle.Reset();
+		}
 		if (TickHandle.IsValid())
 		{
 			FTicker::GetCoreTicker().RemoveTicker(TickHandle);
@@ -116,6 +122,33 @@ private:
 	FDelegateHandle FilesLoadedHandle;
 	FDelegateHandle TickHandle;
 	FDelegateHandle WatchHandle;
+	FDelegateHandle MenuRetryHandle;
+	int32 MenuTries = 0;
+
+	bool TakeOverPackageMenu()
+	{
+		UToolMenu* File = UToolMenus::Get()->FindMenu("MainFrame.MainTabMenu.File");
+		FToolMenuSection* Section = File ? File->FindSection("FileProject") : nullptr;
+		FToolMenuEntry* Original = Section ? Section->FindEntry("PackageProject") : nullptr;
+		if (!Original)
+		{
+			return false;
+		}
+		FToolMenuOwnerScoped OwnerScoped(this);
+		if (!Section->FindEntry("PackageProjectEngine"))
+		{
+			FToolMenuEntry Engine = *Original;
+			Engine.Name = "PackageProjectEngine";
+			Engine.Label = LOCTEXT("EnginePackage", "Package Project (Unreal)");
+			Section->AddEntry(Engine);
+		}
+		Section->AddEntry(FToolMenuEntry::InitMenuEntry("PackageProject",
+			LOCTEXT("PackageProjectFile", "Package Project"),
+			LOCTEXT("PackageProjectFileTip", "Package the project and archive its chunks."),
+			FSlateIcon(FEditorStyle::GetStyleSetName(), "MainFrame.PackageProject"),
+			FUIAction(FExecuteAction::CreateStatic(&AEWPackaging::OpenChunkNames))));
+		return true;
+	}
 	FDateTime LastUatLog;
 
 	bool WatchPackaging(float)
@@ -288,6 +321,18 @@ private:
 
 	void RegisterMenus()
 	{
+		if (!TakeOverPackageMenu())
+		{
+			MenuRetryHandle = FTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([this](float)
+			{
+				if (TakeOverPackageMenu() || ++MenuTries > 60)
+				{
+					MenuRetryHandle.Reset();
+					return false;
+				}
+				return true;
+			}), 0.5f);
+		}
 		FToolMenuOwnerScoped OwnerScoped(this);
 		AEWMenus::AddGroupedToolEntry("Cook", LOCTEXT("CookGroup", "Cook"), "AEWCookChooseLabels",
 			LOCTEXT("ChooseLabels", "Choose What To Cook..."),
@@ -298,8 +343,8 @@ private:
 			LOCTEXT("ClearChunksTip", "List and clear every chunk assignment that doesn't come from a PrimaryAssetLabel: chunk IDs stored in packages (old 'Assign to Chunk') and chunk IDs on Asset Manager rules. Asks before changing anything."),
 			FUIAction(FExecuteAction::CreateStatic(&FAEWModdingCoreModule::ClearChunks)));
 		AEWMenus::AddGroupedToolEntry("Cook", LOCTEXT("CookGroup", "Cook"), "AEWCookNameChunks",
-			LOCTEXT("NameChunks", "Name Chunks"),
-			LOCTEXT("NameChunksTip", "Give each chunk the file name its mod is shipped under, and the zip it goes in. After Package Project finishes, the named chunks are copied as <name>_P.pak/.ucas/.utoc and zipped."),
+			LOCTEXT("NameChunks", "Package Project"),
+			LOCTEXT("NameChunksTip", "Package the project and archive its chunks."),
 			FUIAction(FExecuteAction::CreateStatic(&AEWPackaging::OpenChunkNames)));
 	}
 

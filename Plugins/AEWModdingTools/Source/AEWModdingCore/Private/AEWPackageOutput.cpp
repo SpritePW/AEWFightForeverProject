@@ -6,6 +6,19 @@
 #include "HAL/PlatformMisc.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Misc/App.h"
+#include "Misc/MessageDialog.h"
+#include "DerivedDataCacheInterface.h"
+#include "DesktopPlatformModule.h"
+#include "IDesktopPlatform.h"
+#include "EditorStyleSet.h"
+#include "FileHelpers.h"
+#include "IUATHelperModule.h"
+#include "UnrealEdMisc.h"
+#include "Editor.h"
+#include "Settings/EditorExperimentalSettings.h"
+#include "Settings/ProjectPackagingSettings.h"
+#include "Framework/Application/SlateApplication.h"
 
 #define LOCTEXT_NAMESPACE "AEWPackageOutput"
 
@@ -255,6 +268,144 @@ namespace AEWPackaging
 		Log.Insert(FString::Printf(TEXT("Packaged mods: %d chunk(s) into %d zip(s) in %s"), Done.Num(), ZipNames.Num(), *OutDir), 0);
 		FFileHelper::SaveStringArrayToFile(Log, *(OutDir / TEXT("PackagedMods.txt")));
 		return Done.Num();
+	}
+
+	bool PackageProject()
+	{
+		const FText Title = LOCTEXT("PackageTitle", "Package Project");
+		if (GEditor && GEditor->PlayWorld)
+		{
+			FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("PackagePIE", "Stop Play In Editor first."), &Title);
+			return false;
+		}
+		if (!FEditorFileUtils::SaveDirtyPackages(true, true, true, false, false, false))
+		{
+			return false;
+		}
+
+		UProjectPackagingSettings* PS = GetMutableDefault<UProjectPackagingSettings>();
+		if (PS->StagingDirectory.Path.IsEmpty())
+		{
+			PS->StagingDirectory.Path = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir());
+		}
+		IDesktopPlatform* Desktop = FDesktopPlatformModule::Get();
+		if (!Desktop)
+		{
+			return false;
+		}
+		const void* Parent = nullptr;
+		if (FSlateApplication::IsInitialized())
+		{
+			Parent = FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr);
+		}
+		FString Folder;
+		if (!Desktop->OpenDirectoryDialog(Parent, LOCTEXT("PackageFolder", "Package project...").ToString(), PS->StagingDirectory.Path, Folder))
+		{
+			return false;
+		}
+		PS->StagingDirectory.Path = Folder;
+		PS->SaveConfig();
+
+		const UProjectPackagingSettings::FConfigurationInfo& Config = UProjectPackagingSettings::ConfigurationInfo[PS->BuildConfiguration];
+		FString Options;
+		if (PS->FullRebuild)
+		{
+			Options += TEXT(" -clean");
+		}
+		if (PS->bCompressed)
+		{
+			Options += TEXT(" -compressed");
+		}
+		if (PS->bSkipEditorContent)
+		{
+			Options += TEXT(" -SkipCookingEditorContent");
+		}
+		if (FDerivedDataCacheInterface* DDC = GetDerivedDataCache())
+		{
+			Options += FString::Printf(TEXT(" -ddc=%s"), DDC->GetGraphName());
+		}
+		if (PS->bUseIoStore)
+		{
+			Options += TEXT(" -iostore");
+			PS->UsePakFile = true;
+		}
+		if (PS->UsePakFile)
+		{
+			Options += TEXT(" -pak");
+		}
+		if (PS->bUseIoStore)
+		{
+			Options += TEXT(" -iostore");
+		}
+		if (PS->bMakeBinaryConfig)
+		{
+			Options += TEXT(" -makebinaryconfig");
+		}
+		if (PS->IncludePrerequisites)
+		{
+			Options += TEXT(" -prereqs");
+		}
+		if (!PS->ApplocalPrerequisitesDirectory.Path.IsEmpty())
+		{
+			Options += FString::Printf(TEXT(" -applocaldirectory=\"%s\""), *PS->ApplocalPrerequisitesDirectory.Path);
+		}
+		else if (PS->IncludeAppLocalPrerequisites)
+		{
+			Options += TEXT(" -applocaldirectory=\"$(EngineDir)/Binaries/ThirdParty/AppLocalDependencies\"");
+		}
+		if (PS->ForDistribution)
+		{
+			Options += TEXT(" -distribution");
+		}
+		if (!PS->IncludeDebugFiles)
+		{
+			Options += TEXT(" -nodebuginfo");
+		}
+		if (PS->bGenerateChunks)
+		{
+			Options += TEXT(" -manifests");
+		}
+		Options += TEXT(" -targetplatform=Win64");
+		const bool bBuild = PS->Build == EProjectPackagingBuild::Always || PS->Build == EProjectPackagingBuild::IfProjectHasCode
+			|| (PS->Build == EProjectPackagingBuild::IfEditorWasBuiltLocally && !FApp::GetEngineIsPromotedBuild());
+		if (bBuild)
+		{
+			Options += TEXT(" -build");
+		}
+		if (PS->IncludeCrashReporter)
+		{
+			Options += TEXT(" -CrashReporter");
+		}
+		const int32 Cookers = GetDefault<UEditorExperimentalSettings>()->MultiProcessCooking;
+		if (Cookers > 0)
+		{
+			Options += FString::Printf(TEXT(" -NumCookersToSpawn=%d"), Cookers);
+		}
+		const FTargetInfo* Target = PS->GetBuildTargetInfo();
+		if (!Target)
+		{
+			Options += FString::Printf(TEXT(" -clientconfig=%s"), LexToString(Config.Configuration));
+		}
+		else if (Target->Type == EBuildTargetType::Server)
+		{
+			Options += FString::Printf(TEXT(" -target=%s -serverconfig=%s"), *Target->Name, LexToString(Config.Configuration));
+		}
+		else
+		{
+			Options += FString::Printf(TEXT(" -target=%s -clientconfig=%s"), *Target->Name, LexToString(Config.Configuration));
+		}
+
+		const FString Project = FPaths::ConvertRelativePathToFull(FPaths::GetProjectFilePath());
+		const FString CommandLine = FString::Printf(TEXT("-ScriptsForProject=\"%s\" BuildCookRun -nocompileeditor%s -nop4 -project=\"%s\" -cook -stage -archive -archivedirectory=\"%s\" -package -ue4exe=\"%s\" %s -utf8output"),
+			*Project,
+			FApp::IsEngineInstalled() ? TEXT(" -installed") : TEXT(""),
+			*Project,
+			*PS->StagingDirectory.Path,
+			*FUnrealEdMisc::Get().GetExecutableForCommandlets(),
+			*Options);
+
+		IUATHelperModule::Get().CreateUatTask(CommandLine, LOCTEXT("Windows64", "Windows (64-bit)"), LOCTEXT("PackagingProjectTaskName", "Packaging project"), LOCTEXT("PackagingTaskName", "Packaging"), FEditorStyle::GetBrush(TEXT("MainFrame.PackageProject")));
+		return true;
 	}
 }
 
