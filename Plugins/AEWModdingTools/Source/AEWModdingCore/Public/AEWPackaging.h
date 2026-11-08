@@ -13,6 +13,18 @@ namespace AEWPackaging
 
 	AEWMODDINGCORE_API int32 ChooseLabelsToCook();
 
+	AEWMODDINGCORE_API void OpenChunkNames();
+
+	AEWMODDINGCORE_API FString CleanModName(const FString& In);
+
+	AEWMODDINGCORE_API FString UatLogPath();
+
+	AEWMODDINGCORE_API bool UatLogShowsSuccess(const FString& Path);
+
+	AEWMODDINGCORE_API int32 ProcessLastPackage(TArray<FString>& Log);
+
+	AEWMODDINGCORE_API int32 ProcessPackagedChunks(const FString& PaksFolder, const FString& PackageFolder, TArray<FString>& Log);
+
 	AEWMODDINGCORE_API int32 NextFreeChunkId();
 
 	AEWMODDINGCORE_API int32 ChunkForLabel(const FString& LabelPackage);

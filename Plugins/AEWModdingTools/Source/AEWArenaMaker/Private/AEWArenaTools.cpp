@@ -2316,7 +2316,7 @@ namespace
 	void GatherWorldVerts(UStaticMeshComponent* SM, TArray<FVector>& Out)
 	{
 		UStaticMesh* Mesh = SM ? SM->GetStaticMesh() : nullptr;
-		FStaticMeshRenderData* Render = Mesh ? Mesh->RenderData.Get() : nullptr;
+		FStaticMeshRenderData* Render = Mesh ? Mesh->GetRenderData() : nullptr;
 		const FTransform T = SM ? SM->GetComponentTransform() : FTransform::Identity;
 		if (Render && Render->LODResources.Num() > 0)
 		{

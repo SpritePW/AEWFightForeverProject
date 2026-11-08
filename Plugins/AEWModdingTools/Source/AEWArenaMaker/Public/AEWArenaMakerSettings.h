@@ -4,6 +4,14 @@
 #include "Engine/DeveloperSettings.h"
 #include "AEWArenaMakerSettings.generated.h"
 
+UENUM()
+enum class EAEWCrowdType : uint8
+{
+	ByDistance UMETA(DisplayName = "By distance"),
+	People UMETA(DisplayName = "People only"),
+	Billboards UMETA(DisplayName = "Billboards only")
+};
+
 UCLASS(config = Editor, defaultconfig, meta = (DisplayName = "Arena Maker"))
 class AEWARENAMAKER_API UAEWArenaMakerSettings : public UDeveloperSettings
 {
@@ -61,6 +69,39 @@ public:
 
 	UPROPERTY(EditAnywhere, config, Category = "Barricades", meta = (DisplayName = "Barricade Class", ToolTip = "Game barricade piece Make Barricade From Selected builds on. Its model is removed and your mesh put in its place, so only its behaviour and reaction, hit and weapon boxes are used.", MetaClass = "Actor"))
 	FSoftClassPath BarricadeClass = FSoftClassPath(TEXT("/Game/GameData/Resources/Models/EmvData/Arean/Common/Barricade/0000_Base/BP_Barricade.BP_Barricade_C"));
+
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Seat Spacing", ClampMin = "0", ToolTip = "Distance between people along a row (cm) for Fill Audience From Selected. 0 = spread each row evenly across the plane."))
+	float AudienceSeatSpacing = 70.f;
+
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Row Spacing", ClampMin = "0", ToolTip = "Distance between rows, towards the ring (cm). 0 = spread the rows evenly over the plane."))
+	float AudienceRowSpacing = 90.f;
+
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "People Per Row", ClampMin = "1", ToolTip = "Fill Audience: how many people in each row."))
+	int32 AudiencePerRow = 10;
+
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Rows", ClampMin = "1", ToolTip = "Fill Audience: how many rows."))
+	int32 AudienceRows = 5;
+
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Fill", ClampMin = "0.05", ClampMax = "1", ToolTip = "Share of spots that get a person (1 = every spot)."))
+	float AudienceFill = 0.85f;
+
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Row Straightness", ClampMin = "0", ClampMax = "1", ToolTip = "How straight the rows are: 1 = everyone exactly in line, lower values scatter people forwards, backwards and sideways."))
+	float AudienceStraightness = 0.8f;
+
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Facing Variation", ClampMin = "0", ClampMax = "90", Units = "Degrees", ToolTip = "How far each person may turn away from facing the ring."))
+	float AudienceTurnVariation = 8.f;
+
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Steepest Surface", ClampMin = "0", ClampMax = "60", Units = "Degrees", ToolTip = "Surfaces steeper than this are not stood on."))
+	float AudienceMaxSlope = 30.f;
+
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Crowd Type", ToolTip = "By distance: people near the ring, billboards beyond Billboards Beyond. People only / Billboards only: the whole fill is one kind."))
+	EAEWCrowdType AudienceCrowdType = EAEWCrowdType::ByDistance;
+
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (DisplayName = "Billboards Beyond", ClampMin = "0", ToolTip = "People further than this from the ring (cm) are flat billboard crowd instead of full models, like the game's back rows. 0 = always full models."))
+	float AudienceBillboardDistance = 0.f;
+
+	UPROPERTY(EditAnywhere, config, Category = "Audience", meta = (AllowedClasses = "World", DisplayName = "Crowd Template Level", ToolTip = "Level whose crowd (BP_Audience people and billboards) is copied when the open arena has none of its own."))
+	FSoftObjectPath AudienceTemplateLevel = FSoftObjectPath(TEXT("/Game/GameData/Levels/ArenaBase/Audience/ArenaAudience_01.ArenaAudience_01"));
 
 	UPROPERTY(config)
 	bool bExistingArenasConverted = false;

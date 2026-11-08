@@ -6,6 +6,6 @@ public class AEWModdingCore : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "DeveloperSettings", "Slate", "SlateCore", "InputCore", "ToolMenus" });
-		PrivateDependencyModuleNames.AddRange(new string[] { "UnrealEd", "EditorStyle", "PropertyEditor", "Settings", "AssetTools", "AssetRegistry" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "UnrealEd", "EditorStyle", "PropertyEditor", "Settings", "AssetTools", "AssetRegistry", "FileUtilities" });
 	}
 }

@@ -100,6 +100,12 @@ public:
 	static int32 RestoreMeshesFromBarricades();
 
 	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static int32 FillAudienceFromSelected();
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static int32 ClearGeneratedAudience();
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
 	static int32 ConvertExistingArenas();
 
 	static bool IsConvertingArenas();

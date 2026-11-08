@@ -213,10 +213,42 @@ private:
 			LOCTEXT("RestoreMeshes", "Restore Meshes From Barricades"),
 			LOCTEXT("RestoreMeshesTip", "Undo Make Barricade From Selected: remove the barricade pieces made for the selected meshes (or for all of them in the level if nothing is selected) and leave the plain meshes. Barricades made by older versions get their meshes rebuilt."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::RestoreMeshesFromBarricades(); })));
+		AEWMenus::AddGroupedToolEntry("Arena", ArenaLabel, "AEWArenaFillAudience",
+			LOCTEXT("FillAudience", "Fill Audience From Selected"),
+			LOCTEXT("FillAudienceTip", "Place an Empty Actor (Place Actors > Basic > Empty Actor) where the crowd should go, turned so its X arrow points the way they should face, select it and run this. A window sets people per row, rows, spacing and fill with a live preview that follows the marker as you move or rotate it. The crowd stands on whatever is under it and the marker is removed. Selecting meshes without a marker fills them completely."),
+			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::FillAudienceFromSelected(); })));
+		AEWMenus::AddGroupedToolEntry("Arena", ArenaLabel, "AEWArenaClearAudience",
+			LOCTEXT("ClearAudience", "Clear Generated Audience"),
+			LOCTEXT("ClearAudienceTip", "Remove generated crowd: on the selected meshes, the selected crowd blocks, or all of it if nothing is selected. The level's own crowd is kept."),
+			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::ClearGeneratedAudience(); })));
 		AEWMenus::AddGroupedToolEntry("Arena", ArenaLabel, "AEWArenaCameraPreview",
 			LOCTEXT("CameraPreview", "Toggle Camera Preview"),
 			LOCTEXT("CameraPreviewTip", "Show where the gameplay camera settles for this arena's camera table (Camera Preview Row in the settings), using the game's own camera maths, with a GameplayCameraPreview camera you can look through. Uses the selected actors as wrestlers, or the 1-on-1 starts if nothing is selected. Run it again to remove the preview."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::ToggleCameraPreview(); })));
+
+		UToolMenus* Menus = UToolMenus::Get();
+		const FString ArenaMenu = TEXT("LevelEditor.MainMenu.Window.AEWModdingTools.Arena");
+		for (const TCHAR* Context : { TEXT("LevelEditor.ActorContextMenu"), TEXT("LevelEditor.EmptySelectionContextMenu") })
+		{
+			if (UToolMenu* Menu = Menus->ExtendMenu(Context))
+			{
+				FToolMenuSection& Section = Menu->FindOrAddSection("AEWFightForever");
+				Section.Label = LOCTEXT("ContextSection", "AEW Fight Forever");
+				if (!Section.FindEntry("AEWArena"))
+				{
+					Section.AddSubMenu("AEWArena", ArenaLabel, LOCTEXT("ContextArenaTip", "Arena Maker tools for the open arena"), FNewToolMenuChoice());
+				}
+			}
+			const FString Child = FString(Context) + TEXT(".AEWArena");
+			if (!Menus->IsMenuRegistered(FName(*Child)))
+			{
+				Menus->RegisterMenu(FName(*Child), FName(*ArenaMenu));
+			}
+			if (!Menus->IsMenuRegistered(FName(*(Child + TEXT(".Overrides")))))
+			{
+				Menus->RegisterMenu(FName(*(Child + TEXT(".Overrides"))), FName(*(ArenaMenu + TEXT(".Overrides"))));
+			}
+		}
 	}
 
 	FDelegateHandle RemovedHandle;

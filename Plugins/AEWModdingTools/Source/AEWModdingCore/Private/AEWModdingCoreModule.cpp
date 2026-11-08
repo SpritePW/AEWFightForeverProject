@@ -16,6 +16,15 @@
 #include "UObject/Package.h"
 #include "UObject/UObjectHash.h"
 #include "UObject/UObjectGlobals.h"
+#include "AEWModdingSettings.h"
+#include "SChunkNamesPanel.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Framework/Docking/TabManager.h"
+#include "Widgets/Docking/SDockTab.h"
+#include "HAL/FileManager.h"
+#include "HAL/PlatformMisc.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 
 #define LOCTEXT_NAMESPACE "AEWModdingCore"
 
@@ -27,6 +36,11 @@ public:
 	virtual void StartupModule() override
 	{
 		UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FAEWModdingCoreModule::RegisterMenus));
+		FGlobalTabmanager::Get()->RegisterNomadTabSpawner(SChunkNamesPanel::TabName,
+			FOnSpawnTab::CreateLambda([](const FSpawnTabArgs&) { return SNew(SDockTab).TabRole(ETabRole::NomadTab)[ SNew(SChunkNamesPanel) ]; }))
+			.SetDisplayName(LOCTEXT("ChunkNamesTab", "Name Chunks"))
+			.SetTooltipText(LOCTEXT("ChunkNamesTabTip", "Name each chunk's packaged files and zip"))
+			.SetMenuType(ETabSpawnerMenuType::Hidden);
 
 		FCookModificationDelegate& Cook = FGameDelegates::Get().GetCookModificationDelegate();
 		if (Cook.IsBound())
@@ -53,6 +67,8 @@ public:
 			{
 				Queue(false);
 			}
+			LastUatLog = IFileManager::Get().GetTimeStamp(*AEWPackaging::UatLogPath());
+			WatchHandle = FTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateRaw(this, &FAEWModdingCoreModule::WatchPackaging), 3.f);
 		}
 	}
 
@@ -60,7 +76,16 @@ public:
 	{
 		UToolMenus::UnRegisterStartupCallback(this);
 		UToolMenus::UnregisterOwner(this);
+		if (FSlateApplication::IsInitialized())
+		{
+			FGlobalTabmanager::Get()->UnregisterNomadTabSpawner(SChunkNamesPanel::TabName);
+		}
 		UPackage::PackageSavedEvent.Remove(SavedHandle);
+		if (WatchHandle.IsValid())
+		{
+			FTicker::GetCoreTicker().RemoveTicker(WatchHandle);
+			WatchHandle.Reset();
+		}
 		if (TickHandle.IsValid())
 		{
 			FTicker::GetCoreTicker().RemoveTicker(TickHandle);
@@ -90,6 +115,45 @@ private:
 	FDelegateHandle RenamedHandle;
 	FDelegateHandle FilesLoadedHandle;
 	FDelegateHandle TickHandle;
+	FDelegateHandle WatchHandle;
+	FDateTime LastUatLog;
+
+	bool WatchPackaging(float)
+	{
+		const FString UatLog = AEWPackaging::UatLogPath();
+		const FDateTime Stamp = IFileManager::Get().GetTimeStamp(*UatLog);
+		if (Stamp == FDateTime::MinValue() || Stamp <= LastUatLog)
+		{
+			return true;
+		}
+		if (!AEWPackaging::UatLogShowsSuccess(UatLog))
+		{
+			return true;
+		}
+		LastUatLog = Stamp;
+		if (!AEWPackaging::Settings()->bProcessPackagedChunks)
+		{
+			return true;
+		}
+		TArray<FString> Log;
+		const int32 Count = AEWPackaging::ProcessLastPackage(Log);
+		if (Count < 0)
+		{
+			return true;
+		}
+		for (const FString& Line : Log)
+		{
+			UE_LOG(LogAEWModding, Display, TEXT("%s"), *Line);
+		}
+		FNotificationInfo Info(FText::FromString(Log.Num() > 0 ? Log[0] : FString()));
+		Info.ExpireDuration = 10.f;
+		Info.bUseLargeFont = false;
+		if (TSharedPtr<SNotificationItem> Item = FSlateNotificationManager::Get().AddNotification(Info))
+		{
+			Item->SetCompletionState(Count > 0 ? SNotificationItem::CS_Success : SNotificationItem::CS_None);
+		}
+		return true;
+	}
 
 	static bool IsTablePath(const FString& PackageName)
 	{
@@ -233,6 +297,10 @@ private:
 			LOCTEXT("ClearChunks", "Clear Unlabelled Chunk Assignments"),
 			LOCTEXT("ClearChunksTip", "List and clear every chunk assignment that doesn't come from a PrimaryAssetLabel: chunk IDs stored in packages (old 'Assign to Chunk') and chunk IDs on Asset Manager rules. Asks before changing anything."),
 			FUIAction(FExecuteAction::CreateStatic(&FAEWModdingCoreModule::ClearChunks)));
+		AEWMenus::AddGroupedToolEntry("Cook", LOCTEXT("CookGroup", "Cook"), "AEWCookNameChunks",
+			LOCTEXT("NameChunks", "Name Chunks"),
+			LOCTEXT("NameChunksTip", "Give each chunk the file name its mod is shipped under, and the zip it goes in. After Package Project finishes, the named chunks are copied as <name>_P.pak/.ucas/.utoc and zipped."),
+			FUIAction(FExecuteAction::CreateStatic(&AEWPackaging::OpenChunkNames)));
 	}
 
 	static void ClearChunks()

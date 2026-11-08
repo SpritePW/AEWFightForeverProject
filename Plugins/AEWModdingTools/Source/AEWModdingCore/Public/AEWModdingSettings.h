@@ -4,6 +4,21 @@
 #include "Engine/DeveloperSettings.h"
 #include "AEWModdingSettings.generated.h"
 
+USTRUCT()
+struct FAEWChunkOutput
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, Category = "Chunk")
+	int32 ChunkId = 0;
+
+	UPROPERTY(EditAnywhere, Category = "Chunk", meta = (ToolTip = "The packaged files are renamed to <Name>_P.pak/.ucas/.utoc. Empty = the chunk is left as pakchunk<ID>."))
+	FString Name;
+
+	UPROPERTY(EditAnywhere, Category = "Chunk", meta = (ToolTip = "Zip the files go in (without .zip). Chunks with the same zip name share one zip. Empty = the chunk's own name."))
+	FString Zip;
+};
+
 UCLASS(config = Editor, defaultconfig, meta = (DisplayName = "AEW Modding Tools"))
 class AEWMODDINGCORE_API UAEWModdingSettings : public UDeveloperSettings
 {
@@ -34,5 +49,14 @@ public:
 
 	UPROPERTY(EditAnywhere, config, Category = "Tables", meta = (AllowedClasses = "DataTable", DisplayName = "Always Label Tables", ToolTip = "Game DataTables that are edited directly (not through a _New parent) and must always be packaged, e.g. DT_ConvertEntranceCutsceneList for entrance swaps. They are kept in the Base Tables label automatically."))
 	TArray<FSoftObjectPath> AlwaysLabelTables;
+
+	UPROPERTY(EditAnywhere, config, Category = "Packaged Mods", meta = (DisplayName = "Chunk Names", ToolTip = "Set with Cook > Name Chunks. After Package Project finishes, each named chunk's files are copied as <Name>_P.* to the output folder and zipped."))
+	TArray<FAEWChunkOutput> ChunkOutputs;
+
+	UPROPERTY(EditAnywhere, config, Category = "Packaged Mods", meta = (DisplayName = "Output Folder", ToolTip = "Where the renamed files and zips go. Empty = a Mods folder inside the packaging folder."))
+	FDirectoryPath PackagedModsFolder;
+
+	UPROPERTY(EditAnywhere, config, Category = "Packaged Mods", meta = (DisplayName = "Rename And Zip After Packaging"))
+	bool bProcessPackagedChunks = true;
 
 };
