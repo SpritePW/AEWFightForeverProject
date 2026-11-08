@@ -59,6 +59,7 @@ namespace
 		FVector A;
 		FVector B;
 		FVector C;
+		float Up = 1.f;
 	};
 
 	bool IsGenerated(const AActor* A)
@@ -347,7 +348,8 @@ namespace
 					continue;
 				}
 				const float Nz = N.Z / Len;
-				if (FMath::Abs(Nz) >= MinNormalZ)
+				Tri.Up = FMath::Abs(Nz);
+				if (Tri.Up >= MinNormalZ)
 				{
 					Out.Add(Tri);
 				}
@@ -408,7 +410,7 @@ namespace
 			}
 		}
 
-		void Heights(const TArray<FUpTriangle>& Tris, float X, float Y, TArray<float>& Out) const
+		void Heights(const TArray<FUpTriangle>& Tris, float X, float Y, float MinUp, TArray<float>& Out) const
 		{
 			Out.Reset();
 			const TArray<int32>* List = Cells.Find(Key(X, Y));
@@ -419,7 +421,7 @@ namespace
 			for (int32 Index : *List)
 			{
 				float Z = 0.f;
-				if (HeightAt(Tris[Index], X, Y, Z))
+				if (Tris[Index].Up >= MinUp && HeightAt(Tris[Index], X, Y, Z))
 				{
 					Out.Add(Z);
 				}
@@ -510,7 +512,7 @@ namespace
 			}
 			if (!bUseTraces)
 			{
-				Grid.Heights(Tris, X, Y, Out);
+				Grid.Heights(Tris, X, Y, MinNormalZ, Out);
 				return;
 			}
 			const FVector Start(X, Y, Box.Max.Z + 10.f);
@@ -594,6 +596,7 @@ namespace
 		float Straight = 0.8f;
 		float Billboard = 0.f;
 		float Curve = 0.f;
+		float Slope = 30.f;
 		EAEWCrowdType Type = EAEWCrowdType::ByDistance;
 	};
 
@@ -749,7 +752,7 @@ namespace
 			if (!Cached.IsValid())
 			{
 				Cached = MakeShared<FSurfaceData>();
-				if (!Cached->Build(A, Ctx.MinNormalZ, 100.f))
+				if (!Cached->Build(A, 0.5f, 100.f))
 				{
 					continue;
 				}
@@ -780,6 +783,7 @@ namespace
 		const int32 PerRow = FMath::Clamp(O.PerRow, 1, 2000);
 		const int32 Rows = FMath::Clamp(O.Rows, 1, 2000);
 		const float Fill = FMath::Clamp(O.Fill, 0.f, 1.f);
+		Ctx.MinNormalZ = FMath::Cos(FMath::DegreesToRadians(FMath::Clamp(O.Slope, 0.f, 60.f)));
 		const float Scatter = 1.f - FMath::Clamp(O.Straight, 0.f, 1.f);
 		const float BillboardDistance = Ctx.Billboards.Num() > 0 ? O.Billboard : 0.f;
 		const bool bAllBillboards = O.Type == EAEWCrowdType::Billboards && Ctx.Billboards.Num() > 0;
@@ -1144,6 +1148,7 @@ namespace
 		S->AudiencePerRow = FMath::Clamp(O.PerRow, 1, 2000);
 		S->AudienceRows = FMath::Clamp(O.Rows, 1, 2000);
 		S->AudienceRowCurve = FMath::Clamp(O.Curve, -270.f, 270.f);
+		S->AudienceMaxSlope = FMath::Clamp(O.Slope, 0.f, 60.f);
 		S->AudienceRowSpacing = FMath::Max(O.Row, 0.f);
 		S->AudienceStraightness = FMath::Clamp(O.Straight, 0.f, 1.f);
 		S->AudienceBillboardDistance = FMath::Max(O.Billboard, 0.f);
@@ -1393,7 +1398,8 @@ namespace
 		AddRow(LOCTEXT("OptCurve", "Curve"), LOCTEXT("OptCurveTip", "Bend the rows into arcs, in degrees. The angle is how far the rows wrap around: 0 = straight, 90 = a quarter circle curving towards the way they face (around the ring), negative values curve the other way. Everyone faces the centre of the curve."), &FFillOptions::Curve, 1.f, -270.f, 270.f, 1.f);
 		AddRow(LOCTEXT("OptFill", "Fill %"), LOCTEXT("OptFillTip", "Share of the rows x people spots that get someone. Lowering it only removes people; the rest stay where they are."), &FFillOptions::Fill, 100.f, 0.f, 100.f, 1.f);
 		AddRow(LOCTEXT("OptStraight", "Straightness %"), LOCTEXT("OptStraightTip", "100 = everyone exactly in line; lower scatters people forwards, backwards and sideways."), &FFillOptions::Straight, 100.f, 0.f, 100.f, 1.f);
-		AddRow(LOCTEXT("OptBillboard", "Billboards from"), LOCTEXT("OptBillboardTip", "People further than this many cm from the ring are flat billboard crowd. 0 = always full models."), &FFillOptions::Billboard, 1.f, 0.f, 100000.f, 100.f,
+		AddRow(LOCTEXT("OptSlope", "Max slope"), LOCTEXT("OptSlopeTip", "Steepest surface people will stand on, in degrees. Steeper surfaces (walls, railings, sloped roofs) are ignored and people stand on the next surface below."), &FFillOptions::Slope, 1.f, 0.f, 60.f, 1.f);
+		AddRow(LOCTEXT("OptBillboard", "Billboards from"), LOCTEXT("OptBillboardTip", "With Type set to Distance: spots further than this many cm from the ring's centre get flat billboard cards instead of full people. 0 = everyone is a full person."), &FFillOptions::Billboard, 1.f, 0.f, 100000.f, 100.f,
 			TAttribute<bool>::Create(TAttribute<bool>::FGetter::CreateLambda([Ctx]() { return Ctx->Options.Type == EAEWCrowdType::ByDistance; })));
 
 		const FText Where = FText::FromString(Ctx->Markers.Num() > 0
@@ -1632,7 +1638,7 @@ int32 UAEWArenaTools::FillAudienceFromSelected()
 	for (AActor* A : SurfaceActors)
 	{
 		TSharedPtr<FSurfaceData> Data = MakeShared<FSurfaceData>();
-		if (Data->Build(A, Ctx->MinNormalZ, 100.f))
+		if (Data->Build(A, 0.5f, 100.f))
 		{
 			Ctx->Surfaces.Add(Data);
 		}
@@ -1669,6 +1675,7 @@ int32 UAEWArenaTools::FillAudienceFromSelected()
 	Ctx->Options.PerRow = FMath::Clamp(S->AudiencePerRow, 1, 2000);
 	Ctx->Options.Rows = FMath::Clamp(S->AudienceRows, 1, 2000);
 	Ctx->Options.Curve = FMath::Clamp(S->AudienceRowCurve, -270.f, 270.f);
+	Ctx->Options.Slope = FMath::Clamp(S->AudienceMaxSlope, 0.f, 60.f);
 	if (Ctx->Markers.Num() > 0)
 	{
 		Ctx->Options.Seat = Ctx->Options.Seat > 0.f ? Ctx->Options.Seat : 70.f;
