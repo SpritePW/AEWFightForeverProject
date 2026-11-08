@@ -16,6 +16,9 @@
 #include "Widgets/SNullWidget.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Widgets/Views/STableRow.h"
+#include "DesktopPlatformModule.h"
+#include "IDesktopPlatform.h"
+#include "Framework/Application/SlateApplication.h"
 
 #define LOCTEXT_NAMESPACE "AEWChunkNames"
 
@@ -102,7 +105,7 @@ void SChunkNamesPanel::Construct(const FArguments& InArgs)
 		+ SHorizontalBox::Slot().AutoWidth().Padding(0, 0, 8, 0)
 		[
 			AEWToolUI::MakePrimaryButton(LOCTEXT("ProcessNow", "Export Mods"),
-				LOCTEXT("ProcessNowTip", "Rename and zip the named chunks from the last packaged build. Also runs by itself after every Package Project."),
+				LOCTEXT("ProcessNowTip", "Rename and archive the chunks from the last packaged build. Also runs automatically after every Package Project."),
 				[this]() { ProcessNow(); })
 		]
 		+ SHorizontalBox::Slot().FillWidth(1.f)
@@ -200,10 +203,18 @@ void SChunkNamesPanel::Construct(const FArguments& InArgs)
 				+ SVerticalBox::Slot().AutoHeight()
 				[
 					AEWToolUI::MakeRow(LOCTEXT("Folder", "Output folder"),
-						SNew(SEditableTextBox)
-						.Text_Lambda([this]() { return FText::FromString(OutputFolder); })
-						.OnTextChanged_Lambda([this](const FText& T) { OutputFolder = T.ToString(); })
-						.OnTextCommitted_Lambda([this](const FText&, ETextCommit::Type) { Save(); }))
+						SNew(SHorizontalBox)
+						+ SHorizontalBox::Slot().FillWidth(1.f).Padding(0, 0, 4, 0)
+						[
+							SNew(SEditableTextBox)
+							.Text_Lambda([this]() { return FText::FromString(OutputFolder); })
+							.OnTextChanged_Lambda([this](const FText& T) { OutputFolder = T.ToString(); })
+							.OnTextCommitted_Lambda([this](const FText&, ETextCommit::Type) { Save(); })
+						]
+						+ SHorizontalBox::Slot().AutoWidth()
+						[
+							AEWToolUI::MakeButton(LOCTEXT("Browse", "..."), LOCTEXT("BrowseTip", "Pick the output folder"), [this]() { BrowseFolder(); })
+						])
 				]
 				+ SVerticalBox::Slot().AutoHeight()
 				[
@@ -217,9 +228,9 @@ void SChunkNamesPanel::Construct(const FArguments& InArgs)
 							Save();
 						})
 						[
-							SNew(STextBlock).Text(LOCTEXT("AutoText", "Rename and zip by itself"))
+							SNew(STextBlock).Text(LOCTEXT("AutoText", "Rename and archive automatically"))
 						],
-						LOCTEXT("AutoTip", "When Package Project finishes, rename and zip the named chunks without asking."))
+						LOCTEXT("AutoTip", "When Package Project finishes, rename and archive the chunks without asking."))
 				])
 		]
 
@@ -446,6 +457,27 @@ void SChunkNamesPanel::Save()
 	S->UpdateDefaultConfigFile();
 }
 
+void SChunkNamesPanel::BrowseFolder()
+{
+	IDesktopPlatform* Desktop = FDesktopPlatformModule::Get();
+	if (!Desktop)
+	{
+		return;
+	}
+	const void* Parent = FSlateApplication::Get().FindBestParentWindowHandleForDialogs(AsShared());
+	FString Start = OutputFolder.TrimStartAndEnd();
+	if (Start.IsEmpty() || !FPaths::DirectoryExists(Start))
+	{
+		Start = FPaths::ConvertRelativePathToFull(FPaths::ProjectDir());
+	}
+	FString Picked;
+	if (Desktop->OpenDirectoryDialog(Parent, LOCTEXT("BrowseTitle", "Output folder for packaged mods").ToString(), Start, Picked))
+	{
+		OutputFolder = FPaths::ConvertRelativePathToFull(Picked);
+		Save();
+	}
+}
+
 void SChunkNamesPanel::ProcessNow()
 {
 	Save();
@@ -471,7 +503,7 @@ FText SChunkNamesPanel::GetStatusText() const
 	}
 	const FString Folder = OutputFolder.TrimStartAndEnd().IsEmpty() ? FString(TEXT("Mods inside the packaging folder")) : OutputFolder.TrimStartAndEnd();
 	return FText::FromString(FString::Printf(TEXT("%d chunks, %d named    Output: %s    After packaging: %s"),
-		AllItems.Num(), Named, *Folder, AEWPackaging::Settings()->bProcessPackagedChunks ? TEXT("rename and zip") : TEXT("off")));
+		AllItems.Num(), Named, *Folder, AEWPackaging::Settings()->bProcessPackagedChunks ? TEXT("rename and archive") : TEXT("off")));
 }
 
 FText SChunkNamesPanel::GetPreviewText() const

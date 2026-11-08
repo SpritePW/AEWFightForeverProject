@@ -34,6 +34,7 @@ private:
 	void Select(TSharedPtr<FChunkNameItem> Item);
 	void Save();
 	void ProcessNow();
+	void BrowseFolder();
 	void AddLog(const FString& Line);
 	FText GetStatusText() const;
 	FText GetPreviewText() const;

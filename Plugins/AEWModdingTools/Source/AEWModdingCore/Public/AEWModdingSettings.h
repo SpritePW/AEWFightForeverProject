@@ -56,7 +56,7 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Packaged Mods", meta = (DisplayName = "Output Folder", ToolTip = "Where the renamed files and zips go. Empty = a Mods folder inside the packaging folder."))
 	FDirectoryPath PackagedModsFolder;
 
-	UPROPERTY(EditAnywhere, config, Category = "Packaged Mods", meta = (DisplayName = "Rename And Zip After Packaging"))
+	UPROPERTY(EditAnywhere, config, Category = "Packaged Mods", meta = (DisplayName = "Rename And Archive Automatically"))
 	bool bProcessPackagedChunks = true;
 
 };
