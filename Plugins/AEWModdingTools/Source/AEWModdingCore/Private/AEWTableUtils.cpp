@@ -319,49 +319,150 @@ namespace AEWMenus
 		return Menus->ExtendMenu(Root);
 	}
 
-	void AddToolEntry(FName EntryName, const FText& Label, const FText& ToolTip, const FUIAction& Action)
+	const FSection& ToolsSection()
 	{
-		if (UToolMenu* Root = RootMenu())
-		{
-			Root->FindOrAddSection("Tools").AddMenuEntry(EntryName, Label, ToolTip, FSlateIcon(), Action);
-		}
+		static const FSection Section{ TEXT("Tools"), LOCTEXT("ToolsSection", "Tools"), 0 };
+		return Section;
 	}
 
-	static UToolMenu* SubMenuOf(UToolMenu* Parent, const FString& ParentName, FName Group, const FText& GroupLabel)
+	const FSection& ArenaSection()
 	{
-		UToolMenus* Menus = UToolMenus::Get();
-		if (!Parent)
+		static const FSection Section{ TEXT("Arena"), LOCTEXT("ArenaSection", "Arena"), 10 };
+		return Section;
+	}
+
+	const FSection& PackagingSection()
+	{
+		static const FSection Section{ TEXT("Packaging"), LOCTEXT("PackagingSection", "Packaging"), 20 };
+		return Section;
+	}
+
+	FName MenuName(const FString& Menu)
+	{
+		return Menu.IsEmpty() ? FName(RootMenuName) : FName(*FString::Printf(TEXT("%s.%s"), RootMenuName, *Menu));
+	}
+
+	struct FItem
+	{
+		FName Name;
+		FText Label;
+		FText Tip;
+		FUIAction Action;
+		FNewToolMenuDelegate Fill;
+		int32 Kind = 0;
+		int32 Order = 0;
+	};
+
+	struct FRegisteredSection
+	{
+		FSection Info;
+		TArray<FItem> Items;
+	};
+
+	static TMap<FString, TArray<FRegisteredSection>>& Registry()
+	{
+		static TMap<FString, TArray<FRegisteredSection>> Menus;
+		return Menus;
+	}
+
+	static UToolMenu* MenuFor(const FString& Menu)
+	{
+		if (!RootMenu())
 		{
 			return nullptr;
 		}
-		FToolMenuSection& Groups = Parent->FindOrAddSection("Groups");
-		if (!Groups.FindEntry(Group))
+		UToolMenus* Menus = UToolMenus::Get();
+		const FName Name = MenuName(Menu);
+		if (!Menus->IsMenuRegistered(Name))
 		{
-			Groups.AddSubMenu(Group, GroupLabel, FText::GetEmpty(), FNewToolMenuChoice());
+			Menus->RegisterMenu(Name);
 		}
-		const FName GroupMenu(*FString::Printf(TEXT("%s.%s"), *ParentName, *Group.ToString()));
-		if (!Menus->IsMenuRegistered(GroupMenu))
-		{
-			Menus->RegisterMenu(GroupMenu);
-		}
-		return Menus->ExtendMenu(GroupMenu);
+		return Menus->ExtendMenu(Name);
 	}
 
-	void AddGroupedToolEntry(FName Group, const FText& GroupLabel, FName EntryName, const FText& Label, const FText& ToolTip, const FUIAction& Action)
+	static void Rebuild(const FString& Menu)
 	{
-		if (UToolMenu* Sub = SubMenuOf(RootMenu(), RootMenuName, Group, GroupLabel))
+		UToolMenu* Target = MenuFor(Menu);
+		if (!Target)
 		{
-			Sub->FindOrAddSection("Tools").AddMenuEntry(EntryName, Label, ToolTip, FSlateIcon(), Action);
+			return;
+		}
+		TArray<FRegisteredSection>& Sections = Registry().FindOrAdd(Menu);
+		Sections.StableSort([](const FRegisteredSection& A, const FRegisteredSection& B) { return A.Info.Order < B.Info.Order; });
+		for (const FRegisteredSection& S : Sections)
+		{
+			Target->RemoveSection(S.Info.Name);
+		}
+		for (FRegisteredSection& S : Sections)
+		{
+			FToolMenuSection& Section = Target->AddSection(S.Info.Name, S.Info.Label);
+			S.Items.StableSort([](const FItem& A, const FItem& B) { return A.Order < B.Order; });
+			for (const FItem& I : S.Items)
+			{
+				if (I.Kind == 0)
+				{
+					Section.AddMenuEntry(I.Name, I.Label, I.Tip, FSlateIcon(), I.Action);
+				}
+				else if (I.Kind == 1)
+				{
+					Section.AddSubMenu(I.Name, I.Label, I.Tip, FNewToolMenuChoice());
+				}
+				else
+				{
+					Section.AddSubMenu(I.Name, I.Label, I.Tip, I.Fill);
+				}
+			}
 		}
 	}
 
-	void AddSubGroupedToolEntry(FName Group, const FText& GroupLabel, FName SubGroup, const FText& SubGroupLabel, FName EntryName, const FText& Label, const FText& ToolTip, const FUIAction& Action)
+	static void Add(const FString& Menu, const FSection& Section, FItem&& Item)
 	{
-		const FString GroupName = FString::Printf(TEXT("%s.%s"), RootMenuName, *Group.ToString());
-		if (UToolMenu* Sub = SubMenuOf(SubMenuOf(RootMenu(), RootMenuName, Group, GroupLabel), GroupName, SubGroup, SubGroupLabel))
+		TArray<FRegisteredSection>& Sections = Registry().FindOrAdd(Menu);
+		FRegisteredSection* Found = Sections.FindByPredicate([&Section](const FRegisteredSection& S) { return S.Info.Name == Section.Name; });
+		if (!Found)
 		{
-			Sub->FindOrAddSection("Tools").AddMenuEntry(EntryName, Label, ToolTip, FSlateIcon(), Action);
+			Found = &Sections.AddDefaulted_GetRef();
+			Found->Info = Section;
 		}
+		const FName Name = Item.Name;
+		Found->Items.RemoveAll([Name](const FItem& I) { return I.Name == Name; });
+		Found->Items.Add(MoveTemp(Item));
+		Rebuild(Menu);
+	}
+
+	void AddEntry(const FString& Menu, const FSection& Section, int32 Order, FName EntryName, const FText& Label, const FText& ToolTip, const FUIAction& Action)
+	{
+		FItem Item;
+		Item.Name = EntryName;
+		Item.Label = Label;
+		Item.Tip = ToolTip;
+		Item.Action = Action;
+		Item.Order = Order;
+		Add(Menu, Section, MoveTemp(Item));
+	}
+
+	void AddSubMenu(const FString& Menu, const FSection& Section, int32 Order, FName EntryName, const FText& Label, const FText& ToolTip)
+	{
+		MenuFor(Menu.IsEmpty() ? EntryName.ToString() : Menu + TEXT(".") + EntryName.ToString());
+		FItem Item;
+		Item.Name = EntryName;
+		Item.Label = Label;
+		Item.Tip = ToolTip;
+		Item.Kind = 1;
+		Item.Order = Order;
+		Add(Menu, Section, MoveTemp(Item));
+	}
+
+	void AddDynamicSubMenu(const FString& Menu, const FSection& Section, int32 Order, FName EntryName, const FText& Label, const FText& ToolTip, const FNewToolMenuDelegate& Fill)
+	{
+		FItem Item;
+		Item.Name = EntryName;
+		Item.Label = Label;
+		Item.Tip = ToolTip;
+		Item.Fill = Fill;
+		Item.Kind = 2;
+		Item.Order = Order;
+		Add(Menu, Section, MoveTemp(Item));
 	}
 }
 

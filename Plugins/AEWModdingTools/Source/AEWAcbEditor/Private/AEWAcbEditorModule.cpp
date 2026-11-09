@@ -195,7 +195,7 @@ private:
 	{
 		FToolMenuOwnerScoped OwnerScoped(this);
 
-		AEWMenus::AddToolEntry("OpenAEWAcbEditor",
+		AEWMenus::AddEntry(FString(), AEWMenus::ToolsSection(), 2, "OpenAEWAcbEditor",
 			LOCTEXT("OpenLabel", "ACB Editor"),
 			LOCTEXT("OpenTip", "Edit and import ACB/AWB cue sheets"),
 			FUIAction(FExecuteAction::CreateLambda([]() { FGlobalTabmanager::Get()->TryInvokeTab(AcbEditorTabName); })));

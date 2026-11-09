@@ -334,14 +334,15 @@ private:
 			}), 0.5f);
 		}
 		FToolMenuOwnerScoped OwnerScoped(this);
-		AEWMenus::AddGroupedToolEntry("Cook", LOCTEXT("CookGroup", "Cook"), "AEWCookClearUnlabelledChunks",
-			LOCTEXT("ClearChunks", "Clear Unlabelled Chunk Assignments"),
-			LOCTEXT("ClearChunksTip", "Find and clear chunk IDs not set by a label. Asks first."),
-			FUIAction(FExecuteAction::CreateStatic(&FAEWModdingCoreModule::ClearChunks)));
-		AEWMenus::AddGroupedToolEntry("Cook", LOCTEXT("CookGroup", "Cook"), "AEWCookNameChunks",
+		AEWMenus::AddEntry(FString(), AEWMenus::ToolsSection(), 3, "AEWCookNameChunks",
 			LOCTEXT("NameChunks", "Package Project"),
 			LOCTEXT("NameChunksTip", "Package the project and archive its chunks."),
 			FUIAction(FExecuteAction::CreateStatic(&AEWPackaging::OpenChunkNames)));
+		AEWMenus::AddSubMenu(FString(), AEWMenus::PackagingSection(), 0, "Cook", LOCTEXT("CookGroup", "Cook"), FText::GetEmpty());
+		AEWMenus::AddEntry(TEXT("Cook"), AEWMenus::FSection{ TEXT("Tools"), FText::GetEmpty(), 0 }, 0, "AEWCookClearUnlabelledChunks",
+			LOCTEXT("ClearChunks", "Clear Unlabelled Chunk Assignments"),
+			LOCTEXT("ClearChunksTip", "Find and clear chunk IDs not set by a label. Asks first."),
+			FUIAction(FExecuteAction::CreateStatic(&FAEWModdingCoreModule::ClearChunks)));
 	}
 
 	static void ClearChunks()

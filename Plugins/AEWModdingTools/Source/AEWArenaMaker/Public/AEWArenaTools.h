@@ -85,6 +85,12 @@ public:
 	static void ToggleCameraPreview();
 
 	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static TArray<FName> CameraPreviewRows();
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
+	static void SetCameraPreviewRow(FName Row);
+
+	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")
 	static int32 MakeSharedSublevelsOwn();
 
 	UFUNCTION(BlueprintCallable, Category = "AEW|Arena")

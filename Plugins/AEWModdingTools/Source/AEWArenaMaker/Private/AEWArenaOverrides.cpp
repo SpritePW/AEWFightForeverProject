@@ -28,6 +28,9 @@
 #include "K2Node_MakeStruct.h"
 #include "Kismet/KismetArrayLibrary.h"
 #include "DataTableEditorUtils.h"
+#include "Containers/Ticker.h"
+#include "Framework/Notifications/NotificationManager.h"
+#include "Widgets/Notifications/SNotificationList.h"
 #include "AEWModdingSettings.h"
 #include "K2Node_GetDataTableRow.h"
 #include "Kismet/KismetMathLibrary.h"
@@ -43,6 +46,7 @@
 #include "Components/ArrowComponent.h"
 #include "Components/BillboardComponent.h"
 #include "Components/SphereComponent.h"
+#include "Components/BoxComponent.h"
 #include "AssetRegistryModule.h"
 #include "AssetToolsModule.h"
 #include "IAssetTools.h"
@@ -911,8 +915,11 @@ namespace
 		return Result;
 	}
 
+	void OvUnwatchCameraPreview();
+
 	void OvClearCameraPreview(UWorld* World)
 	{
+		OvUnwatchCameraPreview();
 		FlushPersistentDebugLines(World);
 		TArray<AActor*> Old;
 		for (TActorIterator<AActor> It(World); It; ++It)
@@ -938,208 +945,547 @@ void UAEWArenaTools::ClearCameraPreview()
 	}
 }
 
+namespace
+{
+	UDataTable* OvCameraPreviewTable(UWorld* World, bool& bOutArenaTable)
+	{
+		UDataTable* Table = nullptr;
+		if (AActor* Override = OvFindActorOfClassName(World, TEXT("BP_CameraOverride_C")))
+		{
+			if (FObjectProperty* P = FindFProperty<FObjectProperty>(Override->GetClass(), CameraTableVar))
+			{
+				Table = Cast<UDataTable>(P->GetObjectPropertyValue_InContainer(Override));
+			}
+		}
+		bOutArenaTable = Table != nullptr;
+		if (!Table)
+		{
+			Table = Cast<UDataTable>(OvOverrideSettings()->GameCameraTable.TryLoad());
+		}
+		return Table;
+	}
+
+	ACameraActor* OvFindCameraPreview(UWorld* World)
+	{
+		for (TActorIterator<ACameraActor> It(World); It; ++It)
+		{
+			if (It->ActorHasTag(CameraPreviewTag))
+			{
+				return *It;
+			}
+		}
+		return nullptr;
+	}
+
+	bool OvBuildCameraPreview(bool bInitial);
+
+	void OvQueueCameraPreviewRefresh();
+
+	class FOvCameraTableListener : public FDataTableEditorUtils::INotifyOnDataTableChanged
+	{
+	public:
+		TWeakObjectPtr<UDataTable> Table;
+
+		virtual void PreChange(const UDataTable* Changed, FDataTableEditorUtils::EDataTableChangeInfo Info) override {}
+
+		virtual void PostChange(const UDataTable* Changed, FDataTableEditorUtils::EDataTableChangeInfo Info) override
+		{
+			const UDataTable* Watched = Table.Get();
+			if (Changed && Watched && (Changed == Watched || Changed->RowStruct == Watched->RowStruct))
+			{
+				OvQueueCameraPreviewRefresh();
+			}
+		}
+	};
+
+	struct FOvCameraPreviewWatch
+	{
+		FOvCameraTableListener* Listener = nullptr;
+		TWeakObjectPtr<UDataTable> Table;
+		FDelegateHandle TableHandle;
+		FDelegateHandle MovedHandle;
+		FDelegateHandle AddedHandle;
+		FDelegateHandle DeletedHandle;
+		FDelegateHandle PropertyHandle;
+		FDelegateHandle TickHandle;
+		TArray<TWeakObjectPtr<AActor>> StandIns;
+		TWeakPtr<SNotificationItem> Toast;
+	};
+
+	FOvCameraPreviewWatch& OvCamWatch()
+	{
+		static FOvCameraPreviewWatch Watch;
+		return Watch;
+	}
+
+	void OvUnwatchCameraPreview()
+	{
+		FOvCameraPreviewWatch& W = OvCamWatch();
+		if (UDataTable* T = W.Table.Get())
+		{
+			T->OnDataTableChanged().Remove(W.TableHandle);
+		}
+		if (GEngine && W.MovedHandle.IsValid())
+		{
+			GEngine->OnActorMoved().Remove(W.MovedHandle);
+		}
+		if (GEngine && W.AddedHandle.IsValid())
+		{
+			GEngine->OnLevelActorAdded().Remove(W.AddedHandle);
+		}
+		if (GEngine && W.DeletedHandle.IsValid())
+		{
+			GEngine->OnLevelActorDeleted().Remove(W.DeletedHandle);
+		}
+		if (W.PropertyHandle.IsValid())
+		{
+			FCoreUObjectDelegates::OnObjectPropertyChanged.Remove(W.PropertyHandle);
+		}
+		if (W.TickHandle.IsValid())
+		{
+			FTicker::GetCoreTicker().RemoveTicker(W.TickHandle);
+		}
+		delete W.Listener;
+		W.Listener = nullptr;
+		W.Table.Reset();
+		W.TableHandle.Reset();
+		W.MovedHandle.Reset();
+		W.AddedHandle.Reset();
+		W.DeletedHandle.Reset();
+		W.PropertyHandle.Reset();
+		W.TickHandle.Reset();
+		W.StandIns.Reset();
+	}
+
+	void OvQueueCameraPreviewRefresh()
+	{
+		FOvCameraPreviewWatch& W = OvCamWatch();
+		if (W.TickHandle.IsValid())
+		{
+			return;
+		}
+		W.TickHandle = FTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([](float)
+		{
+			OvCamWatch().TickHandle.Reset();
+			UWorld* World = OvEditorWorld();
+			if (World && OvFindCameraPreview(World))
+			{
+				OvBuildCameraPreview(false);
+			}
+			else
+			{
+				OvUnwatchCameraPreview();
+			}
+			return false;
+		}), 0.1f);
+	}
+
+	bool OvIsCameraPreviewInput(const AActor* A)
+	{
+		if (!A || A->ActorHasTag(CameraPreviewTag))
+		{
+			return false;
+		}
+		const FString ClassName = A->GetClass()->GetName();
+		if (ClassName == TEXT("BP_Ring_C") || ClassName.StartsWith(TEXT("BP_StartMarker")) || ClassName == TEXT("PlayerStart"))
+		{
+			return true;
+		}
+		if (UClass* GameplayCameraClass = OvFindGameplayCameraClass())
+		{
+			if (A->IsA(GameplayCameraClass))
+			{
+				return true;
+			}
+		}
+		return OvCamWatch().StandIns.ContainsByPredicate([A](const TWeakObjectPtr<AActor>& S) { return S.Get() == A; });
+	}
+
+	void OvWatchCameraPreview(UDataTable* Table)
+	{
+		FOvCameraPreviewWatch& W = OvCamWatch();
+		if (W.Table.Get() != Table)
+		{
+			if (UDataTable* Old = W.Table.Get())
+			{
+				Old->OnDataTableChanged().Remove(W.TableHandle);
+			}
+			W.Table = Table;
+			W.TableHandle = Table ? Table->OnDataTableChanged().AddLambda([]() { OvQueueCameraPreviewRefresh(); }) : FDelegateHandle();
+		}
+		if (!W.Listener)
+		{
+			W.Listener = new FOvCameraTableListener();
+		}
+		W.Listener->Table = Table;
+		if (GEngine && !W.MovedHandle.IsValid())
+		{
+			W.MovedHandle = GEngine->OnActorMoved().AddLambda([](AActor* A)
+			{
+				if (OvIsCameraPreviewInput(A))
+				{
+					OvQueueCameraPreviewRefresh();
+				}
+			});
+		}
+		if (GEngine && !W.AddedHandle.IsValid())
+		{
+			auto RingChanged = [](AActor* A)
+			{
+				if (A && A->GetClass()->GetName() == TEXT("BP_Ring_C"))
+				{
+					OvQueueCameraPreviewRefresh();
+				}
+			};
+			W.AddedHandle = GEngine->OnLevelActorAdded().AddLambda(RingChanged);
+			W.DeletedHandle = GEngine->OnLevelActorDeleted().AddLambda(RingChanged);
+		}
+		if (!W.PropertyHandle.IsValid())
+		{
+			W.PropertyHandle = FCoreUObjectDelegates::OnObjectPropertyChanged.AddLambda([](UObject* Object, FPropertyChangedEvent&)
+			{
+				if (!Object)
+				{
+					return;
+				}
+				FOvCameraPreviewWatch& Watch = OvCamWatch();
+				const bool bTable = Object == Watch.Table.Get();
+				const bool bSettings = Object == GetDefault<UAEWArenaMakerSettings>();
+				const bool bOverride = Object->GetClass()->GetName() == TEXT("BP_CameraOverride_C");
+				const UDataTable* AsTable = Cast<UDataTable>(Object);
+				const bool bSameStruct = AsTable && Watch.Table.IsValid() && AsTable->RowStruct == Watch.Table->RowStruct;
+				AActor* AsActor = Cast<AActor>(Object);
+				if (bTable || bSettings || bOverride || bSameStruct || (AsActor && OvIsCameraPreviewInput(AsActor)))
+				{
+					OvQueueCameraPreviewRefresh();
+				}
+			});
+		}
+	}
+
+	bool OvBuildCameraPreview(bool bInitial)
+	{
+		UWorld* World = OvEditorWorld();
+		if (!World)
+		{
+			return false;
+		}
+		const UAEWArenaMakerSettings* Settings = OvOverrideSettings();
+
+		bool bArenaTable = false;
+		UDataTable* Table = OvCameraPreviewTable(World, bArenaTable);
+		FOvCameraParams Cam;
+		const FName RowName = Settings->CameraPreviewRow;
+		if (!OvReadCameraRow(Table, RowName, Cam))
+		{
+			if (!bInitial)
+			{
+				return false;
+			}
+			OvReport(FString::Printf(TEXT("Row '%s' not found in %s.\n\nSet Camera Preview Row in Arena Maker settings."),
+				*RowName.ToString(), Table ? *Table->GetName() : TEXT("the camera table")));
+			return false;
+		}
+
+		TArray<FVector> Wrestlers;
+		FString Source;
+		FOvCameraPreviewWatch& Watch = OvCamWatch();
+		if (bInitial)
+		{
+			Watch.StandIns.Reset();
+			for (FSelectionIterator It(GEditor->GetSelectedActorIterator()); It; ++It)
+			{
+				AActor* A = Cast<AActor>(*It);
+				if (A && !A->ActorHasTag(CameraPreviewTag) && !A->IsA<ACameraActor>())
+				{
+					Watch.StandIns.Add(A);
+				}
+			}
+		}
+		for (const TWeakObjectPtr<AActor>& A : Watch.StandIns)
+		{
+			if (A.IsValid())
+			{
+				Wrestlers.Add(A->GetActorLocation());
+			}
+		}
+		if (Wrestlers.Num() > 0)
+		{
+			Source = FString::Printf(TEXT("%d selected actor(s)"), Wrestlers.Num());
+		}
+		else
+		{
+			const TCHAR* StartNames[] = { TEXT("PlayerStart_1on1_00"), TEXT("PlayerStart_1on1_01") };
+			for (const TCHAR* Name : StartNames)
+			{
+				bool bFound = false;
+				const FVector L = OvStartLocation(World, Name, bFound);
+				if (bFound)
+				{
+					Wrestlers.Add(L);
+				}
+			}
+			Source = TEXT("the 1-on-1 starts");
+		}
+		if (Wrestlers.Num() == 0)
+		{
+			if (bInitial)
+			{
+				OvReport(TEXT("No wrestler positions. Select stand-in actors or load ArenaMatch."));
+			}
+			return false;
+		}
+
+		AActor* Ring = nullptr;
+		for (TActorIterator<AActor> It(World); It; ++It)
+		{
+			if (It->GetClass()->GetName() == TEXT("BP_Ring_C"))
+			{
+				Ring = *It;
+				break;
+			}
+		}
+		const bool bRingFound = Ring != nullptr;
+		TArray<UPrimitiveComponent*> RingAreas;
+		if (Ring)
+		{
+			TArray<UPrimitiveComponent*> Prims;
+			Ring->GetComponents<UPrimitiveComponent>(Prims);
+			for (UPrimitiveComponent* P : Prims)
+			{
+				if (P && P->GetName().StartsWith(TEXT("RingInArea")))
+				{
+					RingAreas.Add(P);
+				}
+			}
+		}
+		auto InRing = [&](const FVector& W)
+		{
+			if (!Ring)
+			{
+				return false;
+			}
+			if (RingAreas.Num() == 0)
+			{
+				const FVector L = Ring->GetActorTransform().InverseTransformPositionNoScale(W);
+				return FMath::Abs(L.X) <= 300.f && FMath::Abs(L.Y) <= 300.f;
+			}
+			for (UPrimitiveComponent* Area : RingAreas)
+			{
+				if (const UBoxComponent* Box = Cast<UBoxComponent>(Area))
+				{
+					const FVector L = Box->GetComponentTransform().InverseTransformPosition(W);
+					const FVector E = Box->GetUnscaledBoxExtent();
+					if (FMath::Abs(L.X) <= E.X && FMath::Abs(L.Y) <= E.Y && FMath::Abs(L.Z) <= E.Z + 120.f)
+					{
+						return true;
+					}
+				}
+				else if (Area->Bounds.GetBox().ExpandBy(FVector(0.f, 0.f, 120.f)).IsInside(W))
+				{
+					return true;
+				}
+			}
+			return false;
+		};
+		bool bAllInRing = bRingFound;
+		for (const FVector& W : Wrestlers)
+		{
+			bAllInRing &= InRing(W);
+		}
+
+		FVector Target = FVector::ZeroVector;
+		for (const FVector& W : Wrestlers)
+		{
+			Target += W;
+		}
+		Target = Target / Wrestlers.Num() + Cam.TargetOffset;
+
+		const float RMin = bAllInRing ? Cam.RMinRing : Cam.RMinArena;
+		const float RMax = bAllInRing ? Cam.RMaxRing : Cam.RMaxArena;
+		float Spread = 0.f;
+		float RawSpread = 0.f;
+		TArray<FVector> Points;
+		TArray<FVector> Bones;
+		for (const FVector& W : Wrestlers)
+		{
+			const FVector B[3] = { W + FVector(0.f, 0.f, 70.f), W + FVector(0.f, 20.f, -91.f), W + FVector(0.f, -20.f, -91.f) };
+			for (const FVector& P : B)
+			{
+				Spread = FMath::Max(Spread, FVector::Dist(P, Target));
+				RawSpread = FMath::Max(RawSpread, FVector::Dist(P, Target));
+				Bones.Add(P);
+			}
+			Spread = Spread < RMin ? RMin : FMath::Min(Spread, RMax);
+			for (const FVector& P : B)
+			{
+				Points.Add(OvClampFromTarget(Target, P, RMin, RMax));
+			}
+		}
+		Points.Add(Target + FVector(0.f, 0.f, Spread * Cam.RateU));
+		Points.Add(Target - FVector(0.f, 0.f, Spread * Cam.RateD));
+		Points.Add(Target + FVector(Spread * Cam.RateX, 0.f, 0.f));
+		Points.Add(Target - FVector(Spread * Cam.RateX, 0.f, 0.f));
+		Points.Add(Target + FVector(0.f, Spread * Cam.RateY, 0.f));
+		Points.Add(Target - FVector(0.f, Spread * Cam.RateY, 0.f));
+
+		const float Alpha = (Spread - Cam.RMinRing) / FMath::Max(Cam.RMaxRing - Cam.RMinRing, 1.f);
+		const float OffsetZ = Cam.OffZMin + Alpha * (Cam.OffZMax - Cam.OffZMin);
+
+		const float Fov = 30.f;
+		const float Aspect = 16.f / 9.f;
+		FVector CamLoc(-2303.f, 0.f, 576.f);
+		FRotator CamRot(-12.f, 0.f, 0.f);
+		UClass* GameplayCameraClass = OvFindGameplayCameraClass();
+		if (GameplayCameraClass)
+		{
+			for (TActorIterator<AActor> It(World, GameplayCameraClass); It; ++It)
+			{
+				CamLoc = It->GetActorLocation();
+				CamRot = It->GetActorRotation();
+				break;
+			}
+		}
+		bool bClamped = false;
+		float RawPitch = CamRot.Pitch;
+		for (int32 i = 0; i < 300; ++i)
+		{
+			RawPitch = (Target - (CamLoc + FVector(0.f, 0.f, OffsetZ))).Rotation().Pitch;
+			float Pitch = RawPitch;
+			bClamped = false;
+			if (Pitch < Cam.PitchMin)
+			{
+				Pitch = Cam.PitchMin;
+				bClamped = true;
+			}
+			else if (Pitch >= Cam.PitchMax)
+			{
+				Pitch = Cam.PitchMax;
+				bClamped = true;
+			}
+			CamRot = FRotator(Pitch, CamRot.Yaw, CamRot.Roll);
+			CamLoc = OvFitPoints(Points, CamRot, Fov, Aspect, 20.f);
+		}
+
+		ACameraActor* Preview = OvFindCameraPreview(World);
+		FlushPersistentDebugLines(World);
+		const float Life = -1.f;
+		DrawDebugSphere(World, Target, 15.f, 12, FColor::Yellow, true, Life, 0, 2.f);
+		DrawDebugCircle(World, Target, Spread, 64, FColor::Yellow, true, Life, 0, 2.f, FVector(0.f, 1.f, 0.f), FVector(1.f, 0.f, 0.f), false);
+		for (const FVector& W : Wrestlers)
+		{
+			DrawDebugCapsule(World, W, 88.f, 34.f, FQuat::Identity, FColor::Orange, true, Life, 0, 2.f);
+		}
+		for (const FVector& P : Points)
+		{
+			DrawDebugPoint(World, P, 14.f, FColor::Cyan, true, Life, 0);
+		}
+		DrawDebugCamera(World, CamLoc, CamRot, Fov, 3.f, FColor::Green, true, Life, 0);
+		DrawDebugLine(World, CamLoc, Target, FColor::Green, true, Life, 0, 2.f);
+		DrawDebugLine(World, CamLoc, FVector(CamLoc.X, CamLoc.Y, Target.Z - Cam.TargetOffset.Z - 88.f), FColor::Silver, true, Life, 0, 1.f);
+
+		const bool bNewPreview = Preview == nullptr;
+		if (bNewPreview)
+		{
+			FActorSpawnParameters Params;
+			Params.OverrideLevel = World->PersistentLevel;
+			Params.ObjectFlags |= RF_Transient;
+			Preview = World->SpawnActor<ACameraActor>(ACameraActor::StaticClass(), CamLoc, CamRot, Params);
+		}
+		else
+		{
+			Preview->SetActorLocationAndRotation(CamLoc, CamRot);
+		}
+		if (Preview)
+		{
+			Preview->Tags.AddUnique(CameraPreviewTag);
+			Preview->SetActorLabel(FString::Printf(TEXT("GameplayCameraPreview_%s"), *RowName.ToString()));
+			Preview->SetFolderPath(TEXT("ArenaOverrides"));
+			if (UCameraComponent* C = Preview->GetCameraComponent())
+			{
+				C->SetFieldOfView(Fov);
+				C->SetAspectRatio(Aspect);
+				C->SetConstraintAspectRatio(true);
+			}
+			if (bNewPreview)
+			{
+				GEditor->SelectNone(false, true);
+				GEditor->SelectActor(Preview, true, true);
+			}
+		}
+		GEditor->RedrawLevelEditingViewports();
+		OvWatchCameraPreview(Table);
+
+		const float Ground = Wrestlers[0].Z - 99.f;
+		const TCHAR* Radii = bAllInRing ? TEXT("Ring") : TEXT("Arena");
+		const FString RingNote = !bRingFound ? FString(TEXT(" No BP_Ring, so the game uses the Arena radii."))
+			: (bAllInRing ? FString(TEXT(" All wrestlers in the ring.")) : FString(TEXT(" Not all wrestlers in the ring.")));
+		const FString PitchNote = bClamped
+			? FString::Printf(TEXT(" (held at %s; raw %.1f, so CameraOffsetZ has no effect)"), RawPitch < Cam.PitchMin ? TEXT("Pitch_Min") : TEXT("Pitch_Max"), RawPitch)
+			: FString();
+		const FString SpreadNote = RawSpread < RMin ? FString::Printf(TEXT(" (raised to RadiusMin_%s)"), Radii)
+			: (RawSpread > RMax ? FString::Printf(TEXT(" (capped at RadiusMax_%s)"), Radii)
+			: FString::Printf(TEXT(" (between RadiusMin_%s %.0f and RadiusMax_%s %.0f, so they have no effect)"), Radii, RMin, Radii, RMax));
+		const FString Summary = FString::Printf(TEXT("Pitch %.1f%s.\nSpread %.0f%s.%s\nCamera %.0f from target, %.0f above feet."),
+			CamRot.Pitch, *PitchNote, Spread, *SpreadNote, *RingNote, FVector::Dist(CamLoc, Target), CamLoc.Z - Ground);
+		if (!bInitial)
+		{
+			if (TSharedPtr<SNotificationItem> Old = Watch.Toast.Pin())
+			{
+				Old->SetFadeOutDuration(0.f);
+				Old->Fadeout();
+			}
+			FNotificationInfo Info(FText::FromString(FString::Printf(TEXT("Camera preview updated: %s"), *RowName.ToString())));
+			Info.ExpireDuration = 2.f;
+			Info.bFireAndForget = true;
+			Watch.Toast = FSlateNotificationManager::Get().AddNotification(Info);
+			return true;
+		}
+
+		FString Message = FString::Printf(TEXT("Row %s of %s (%s), wrestlers at %s.\n\n"),
+			*RowName.ToString(), *Table->GetName(), bArenaTable ? TEXT("arena table") : TEXT("game table"), *Source);
+		Message += Summary + TEXT("\n\n");
+		Message += TEXT("Green: camera. Yellow: target. Cyan: framed points. Orange: wrestlers.\n");
+		Message += TEXT("Updates live. Select actors first to move the wrestlers. Run again to remove.");
+		OvReport(Message);
+		return true;
+	}
+}
+
 bool UAEWArenaTools::PreviewGameplayCamera()
 {
+	return OvBuildCameraPreview(true);
+}
+
+TArray<FName> UAEWArenaTools::CameraPreviewRows()
+{
+	TArray<FName> Rows;
+	if (UWorld* World = OvEditorWorld())
+	{
+		bool bArenaTable = false;
+		if (UDataTable* Table = OvCameraPreviewTable(World, bArenaTable))
+		{
+			Rows = Table->GetRowNames();
+		}
+	}
+	return Rows;
+}
+
+void UAEWArenaTools::SetCameraPreviewRow(FName Row)
+{
+	UAEWArenaMakerSettings* S = GetMutableDefault<UAEWArenaMakerSettings>();
+	S->CameraPreviewRow = Row;
+	S->SaveConfig();
+	S->UpdateDefaultConfigFile();
 	UWorld* World = OvEditorWorld();
-	if (!World)
+	if (World && OvFindCameraPreview(World))
 	{
-		return false;
-	}
-	const UAEWArenaMakerSettings* Settings = OvOverrideSettings();
-
-	UDataTable* Table = nullptr;
-	if (AActor* Override = OvFindActorOfClassName(World, TEXT("BP_CameraOverride_C")))
-	{
-		if (FObjectProperty* P = FindFProperty<FObjectProperty>(Override->GetClass(), CameraTableVar))
-		{
-			Table = Cast<UDataTable>(P->GetObjectPropertyValue_InContainer(Override));
-		}
-	}
-	const bool bArenaTable = Table != nullptr;
-	if (!Table)
-	{
-		Table = Cast<UDataTable>(Settings->GameCameraTable.TryLoad());
-	}
-	FOvCameraParams Cam;
-	const FName RowName = Settings->CameraPreviewRow;
-	if (!OvReadCameraRow(Table, RowName, Cam))
-	{
-		OvReport(FString::Printf(TEXT("Row '%s' not found in %s.\n\nSet Camera Preview Row in Arena Maker settings."),
-			*RowName.ToString(), Table ? *Table->GetName() : TEXT("the camera table")));
-		return false;
-	}
-
-	TArray<FVector> Wrestlers;
-	FString Source;
-	for (FSelectionIterator It(GEditor->GetSelectedActorIterator()); It; ++It)
-	{
-		AActor* A = Cast<AActor>(*It);
-		if (A && !A->ActorHasTag(CameraPreviewTag) && !A->IsA<ACameraActor>())
-		{
-			Wrestlers.Add(A->GetActorLocation());
-		}
-	}
-	if (Wrestlers.Num() > 0)
-	{
-		Source = FString::Printf(TEXT("%d selected actor(s)"), Wrestlers.Num());
+		OvBuildCameraPreview(false);
 	}
 	else
 	{
-		const TCHAR* StartNames[] = { TEXT("PlayerStart_1on1_00"), TEXT("PlayerStart_1on1_01") };
-		for (const TCHAR* Name : StartNames)
-		{
-			bool bFound = false;
-			const FVector L = OvStartLocation(World, Name, bFound);
-			if (bFound)
-			{
-				Wrestlers.Add(L);
-			}
-		}
-		Source = TEXT("the 1-on-1 starts (start markers where placed)");
+		OvBuildCameraPreview(true);
 	}
-	if (Wrestlers.Num() == 0)
-	{
-		OvReport(TEXT("No wrestler positions. Select stand-in actors or load ArenaMatch."));
-		return false;
-	}
-
-	FTransform RingTransform = FTransform::Identity;
-	for (TActorIterator<AActor> It(World); It; ++It)
-	{
-		if (It->GetClass()->GetName() == TEXT("BP_Ring_C"))
-		{
-			RingTransform = It->GetActorTransform();
-			break;
-		}
-	}
-	bool bAllInRing = true;
-	for (const FVector& W : Wrestlers)
-	{
-		const FVector L = RingTransform.InverseTransformPositionNoScale(W);
-		bAllInRing &= FMath::Abs(L.X) <= 300.f && FMath::Abs(L.Y) <= 300.f;
-	}
-
-	FVector Target = FVector::ZeroVector;
-	for (const FVector& W : Wrestlers)
-	{
-		Target += W;
-	}
-	Target = Target / Wrestlers.Num() + Cam.TargetOffset;
-
-	const float RMin = bAllInRing ? Cam.RMinRing : Cam.RMinArena;
-	const float RMax = bAllInRing ? Cam.RMaxRing : Cam.RMaxArena;
-	float Spread = 0.f;
-	TArray<FVector> Points;
-	TArray<FVector> Bones;
-	for (const FVector& W : Wrestlers)
-	{
-		const FVector B[3] = { W + FVector(0.f, 0.f, 80.f), W + FVector(0.f, 15.f, -85.f), W + FVector(0.f, -15.f, -85.f) };
-		for (const FVector& P : B)
-		{
-			Spread = FMath::Max(Spread, FVector::Dist(P, Target));
-			Bones.Add(P);
-		}
-		Spread = Spread < RMin ? RMin : FMath::Min(Spread, RMax);
-		for (const FVector& P : B)
-		{
-			Points.Add(OvClampFromTarget(Target, P, RMin, RMax));
-		}
-	}
-	Points.Add(Target + FVector(0.f, 0.f, Spread * Cam.RateU));
-	Points.Add(Target - FVector(0.f, 0.f, Spread * Cam.RateD));
-	Points.Add(Target + FVector(Spread * Cam.RateX, 0.f, 0.f));
-	Points.Add(Target - FVector(Spread * Cam.RateX, 0.f, 0.f));
-	Points.Add(Target + FVector(0.f, Spread * Cam.RateY, 0.f));
-	Points.Add(Target - FVector(0.f, Spread * Cam.RateY, 0.f));
-
-	const float Alpha = (Spread - Cam.RMinRing) / FMath::Max(Cam.RMaxRing - Cam.RMinRing, 1.f);
-	const float OffsetZ = Cam.OffZMin + Alpha * (Cam.OffZMax - Cam.OffZMin);
-
-	const float Fov = 30.f;
-	const float Aspect = 16.f / 9.f;
-	FVector CamLoc(-2303.f, 0.f, 576.f);
-	FRotator CamRot(-12.f, 0.f, 0.f);
-	UClass* GameplayCameraClass = OvFindGameplayCameraClass();
-	if (GameplayCameraClass)
-	{
-		for (TActorIterator<AActor> It(World, GameplayCameraClass); It; ++It)
-		{
-			CamLoc = It->GetActorLocation();
-			CamRot = It->GetActorRotation();
-			break;
-		}
-	}
-	bool bClamped = false;
-	float RawPitch = CamRot.Pitch;
-	for (int32 i = 0; i < 300; ++i)
-	{
-		RawPitch = (Target - (CamLoc + FVector(0.f, 0.f, OffsetZ))).Rotation().Pitch;
-		float Pitch = RawPitch;
-		bClamped = false;
-		if (Pitch < Cam.PitchMin)
-		{
-			Pitch = Cam.PitchMin;
-			bClamped = true;
-		}
-		else if (Pitch >= Cam.PitchMax)
-		{
-			Pitch = Cam.PitchMax;
-			bClamped = true;
-		}
-		CamRot = FRotator(Pitch, CamRot.Yaw, CamRot.Roll);
-		CamLoc = OvFitPoints(Points, CamRot, Fov, Aspect, 20.f);
-	}
-
-	OvClearCameraPreview(World);
-	const float Life = -1.f;
-	DrawDebugSphere(World, Target, 15.f, 12, FColor::Yellow, true, Life, 0, 2.f);
-	DrawDebugCircle(World, Target, Spread, 64, FColor::Yellow, true, Life, 0, 2.f, FVector(0.f, 1.f, 0.f), FVector(1.f, 0.f, 0.f), false);
-	for (const FVector& W : Wrestlers)
-	{
-		DrawDebugCapsule(World, W, 88.f, 34.f, FQuat::Identity, FColor::Orange, true, Life, 0, 2.f);
-	}
-	for (const FVector& P : Points)
-	{
-		DrawDebugPoint(World, P, 14.f, FColor::Cyan, true, Life, 0);
-	}
-	DrawDebugCamera(World, CamLoc, CamRot, Fov, 3.f, FColor::Green, true, Life, 0);
-	DrawDebugLine(World, CamLoc, Target, FColor::Green, true, Life, 0, 2.f);
-	DrawDebugLine(World, CamLoc, FVector(CamLoc.X, CamLoc.Y, Target.Z - Cam.TargetOffset.Z - 88.f), FColor::Silver, true, Life, 0, 1.f);
-
-	FActorSpawnParameters Params;
-	Params.OverrideLevel = World->PersistentLevel;
-	Params.ObjectFlags |= RF_Transient;
-	ACameraActor* Preview = World->SpawnActor<ACameraActor>(ACameraActor::StaticClass(), CamLoc, CamRot, Params);
-	if (Preview)
-	{
-		Preview->Tags.Add(CameraPreviewTag);
-		Preview->SetActorLabel(TEXT("GameplayCameraPreview"));
-		Preview->SetFolderPath(TEXT("ArenaOverrides"));
-		if (UCameraComponent* C = Preview->GetCameraComponent())
-		{
-			C->SetFieldOfView(Fov);
-			C->SetAspectRatio(Aspect);
-			C->SetConstraintAspectRatio(true);
-		}
-		GEditor->SelectNone(false, true);
-		GEditor->SelectActor(Preview, true, true);
-	}
-	GEditor->RedrawLevelEditingViewports();
-
-	const float Ground = Wrestlers[0].Z - 88.f;
-	FString Message = FString::Printf(TEXT("Camera preview for row '%s' of %s%s, using %s.\n\n"),
-		*RowName.ToString(), *Table->GetName(), bArenaTable ? TEXT(" (this arena's table)") : TEXT(" (the game's table)"), *Source);
-	Message += FString::Printf(TEXT("Radii: %s (all wrestlers %s the ring), spread %.0f.\n"),
-		bAllInRing ? TEXT("RadiusMin_Ring / RadiusMax_Ring") : TEXT("RadiusMin_Arena / RadiusMax_Arena"), bAllInRing ? TEXT("inside") : TEXT("not all inside"), Spread);
-	Message += FString::Printf(TEXT("Pitch: %.1f%s (min %.1f, max %.1f, unclamped %.1f, offset Z %.0f).\n"),
-		CamRot.Pitch, bClamped ? TEXT(", held by the pitch limits") : TEXT(""), Cam.PitchMin, Cam.PitchMax, RawPitch, OffsetZ);
-	Message += FString::Printf(TEXT("Camera: %.0f from target, %.0f above feet, at (%.0f, %.0f, %.0f).\n\n"),
-		FVector::Dist(CamLoc, Target), CamLoc.Z - Ground, CamLoc.X, CamLoc.Y, CamLoc.Z);
-	Message += TEXT("Green: camera. Yellow: framed point. Cyan: kept in view. Orange: wrestlers.\n");
-	Message += TEXT("Look through GameplayCameraPreview or Pilot it. Run again to remove it.\n\n");
-	Message += TEXT("Select actors first to place the wrestlers elsewhere.");
-	OvReport(Message);
-	return true;
 }
 
 namespace

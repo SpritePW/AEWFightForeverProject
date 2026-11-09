@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "UObject/SoftObjectPath.h"
 #include "UObject/UnrealType.h"
+#include "Framework/Commands/UIAction.h"
+#include "ToolMenuDelegates.h"
 
 class UDataTable;
 class UEnum;
@@ -52,9 +54,24 @@ namespace AEWTables
 
 namespace AEWMenus
 {
-	AEWMODDINGCORE_API void AddToolEntry(FName EntryName, const FText& Label, const FText& ToolTip, const struct FUIAction& Action);
+	struct FSection
+	{
+		FName Name;
+		FText Label;
+		int32 Order = 0;
+	};
 
-	AEWMODDINGCORE_API void AddGroupedToolEntry(FName Group, const FText& GroupLabel, FName EntryName, const FText& Label, const FText& ToolTip, const struct FUIAction& Action);
+	AEWMODDINGCORE_API const FSection& ToolsSection();
 
-	AEWMODDINGCORE_API void AddSubGroupedToolEntry(FName Group, const FText& GroupLabel, FName SubGroup, const FText& SubGroupLabel, FName EntryName, const FText& Label, const FText& ToolTip, const struct FUIAction& Action);
+	AEWMODDINGCORE_API const FSection& ArenaSection();
+
+	AEWMODDINGCORE_API const FSection& PackagingSection();
+
+	AEWMODDINGCORE_API FName MenuName(const FString& Menu);
+
+	AEWMODDINGCORE_API void AddEntry(const FString& Menu, const FSection& Section, int32 Order, FName EntryName, const FText& Label, const FText& ToolTip, const FUIAction& Action);
+
+	AEWMODDINGCORE_API void AddSubMenu(const FString& Menu, const FSection& Section, int32 Order, FName EntryName, const FText& Label, const FText& ToolTip);
+
+	AEWMODDINGCORE_API void AddDynamicSubMenu(const FString& Menu, const FSection& Section, int32 Order, FName EntryName, const FText& Label, const FText& ToolTip, const FNewToolMenuDelegate& Fill);
 }

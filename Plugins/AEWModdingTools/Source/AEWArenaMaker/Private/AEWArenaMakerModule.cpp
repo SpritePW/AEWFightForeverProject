@@ -171,63 +171,90 @@ private:
 	void RegisterMenus()
 	{
 		FToolMenuOwnerScoped OwnerScoped(this);
-		AEWMenus::AddToolEntry("OpenAEWArenaMaker",
+		AEWMenus::AddEntry(FString(), AEWMenus::ToolsSection(), 0, "OpenAEWArenaMaker",
 			LOCTEXT("OpenLabel", "Arena Maker"),
 			LOCTEXT("OpenTip", "Copy an imported arena template into a new arena."),
 			FUIAction(FExecuteAction::CreateStatic(&UAEWArenaTools::OpenDialog)));
 		const FText ArenaLabel = LOCTEXT("ArenaGroup", "Arena");
-		const FText OverridesLabel = LOCTEXT("OverridesGroup", "Overrides");
-		AEWMenus::AddSubGroupedToolEntry("Arena", ArenaLabel, "Overrides", OverridesLabel, "AEWArenaStartMarkers",
+		AEWMenus::AddSubMenu(FString(), AEWMenus::ArenaSection(), 0, "Arena", ArenaLabel, LOCTEXT("ArenaMenuTip", "Tools for the open arena"));
+		const FString Arena(TEXT("Arena"));
+		const AEWMenus::FSection Overrides{ TEXT("Overrides"), LOCTEXT("OverridesGroup", "Overrides"), 0 };
+		const AEWMenus::FSection Camera{ TEXT("Camera"), LOCTEXT("CameraGroup", "Camera"), 1 };
+		const AEWMenus::FSection Barricades{ TEXT("Barricades"), LOCTEXT("BarricadesGroup", "Barricades"), 2 };
+		const AEWMenus::FSection Crowd{ TEXT("Crowd"), LOCTEXT("CrowdGroup", "Crowd"), 3 };
+		AEWMenus::AddEntry(Arena, Overrides, 0, "AEWArenaStartMarkers",
 			LOCTEXT("StartMarkers", "Add Start Markers"),
 			LOCTEXT("StartMarkersTip", "Place markers to move the player and referee starts in this arena."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::AddStartMarkers(); })));
-		AEWMenus::AddSubGroupedToolEntry("Arena", ArenaLabel, "Overrides", OverridesLabel, "AEWArenaCameraOverride",
+		AEWMenus::AddEntry(Arena, Overrides, 4, "AEWArenaCameraOverride",
 			LOCTEXT("CameraOverride", "Add Camera Override"),
 			LOCTEXT("CameraOverrideTip", "Add a camera table override for this arena."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::AddCameraOverride(); })));
-		AEWMenus::AddSubGroupedToolEntry("Arena", ArenaLabel, "Overrides", OverridesLabel, "AEWArenaEntranceOverride",
+		AEWMenus::AddEntry(Arena, Overrides, 1, "AEWArenaEntranceOverride",
 			LOCTEXT("EntranceOverride", "Add Entrance Override"),
 			LOCTEXT("EntranceOverrideTip", "Place markers to move the stage, crowd and ring entrances in this arena."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::AddEntranceOverride(); })));
-		AEWMenus::AddSubGroupedToolEntry("Arena", ArenaLabel, "Overrides", OverridesLabel, "AEWArenaWeaponPoints",
+		AEWMenus::AddEntry(Arena, Overrides, 2, "AEWArenaWeaponPoints",
 			LOCTEXT("WeaponPoints", "Add Weapon Point Markers"),
 			LOCTEXT("WeaponPointsTip", "Place markers to move weapon and ladder/thumbtack points in this arena."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::AddWeaponPointMarkers(); })));
-		AEWMenus::AddSubGroupedToolEntry("Arena", ArenaLabel, "Overrides", OverridesLabel, "AEWArenaRuleOverride",
+		AEWMenus::AddEntry(Arena, Overrides, 3, "AEWArenaRuleOverride",
 			LOCTEXT("RuleNodes", "Add Rule Override"),
 			LOCTEXT("RuleNodesTip", "Add Level Blueprint nodes that change the match rule in this arena."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::AddMatchRuleOverrideNodes(); })));
-		AEWMenus::AddSubGroupedToolEntry("Arena", ArenaLabel, "Overrides", OverridesLabel, "AEWArenaRemoveOverrides",
+		AEWMenus::AddEntry(Arena, Overrides, 5, "AEWArenaRemoveOverrides",
 			LOCTEXT("RemoveOverrides", "Remove Overrides..."),
 			LOCTEXT("RemoveOverridesTip", "Choose overrides to remove from the open arena."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::RemoveOverrides(); })));
-		AEWMenus::AddGroupedToolEntry("Arena", ArenaLabel, "AEWArenaMakeBarricade",
+		AEWMenus::AddEntry(Arena, Barricades, 0, "AEWArenaMakeBarricade",
 			LOCTEXT("MakeBarricade", "Make Barricade From Selected"),
 			LOCTEXT("MakeBarricadeTip", "Turn the selected meshes into barricades."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::MakeBarricadeFromSelected(); })));
-		AEWMenus::AddGroupedToolEntry("Arena", ArenaLabel, "AEWArenaBarricadeSettings",
+		AEWMenus::AddEntry(Arena, Barricades, 1, "AEWArenaBarricadeSettings",
 			LOCTEXT("BarricadeSettings", "Add Barricade Settings To Selected"),
 			LOCTEXT("BarricadeSettingsTip", "Add a Settings actor to the selected barricade pieces."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::AddBarricadeSettingsToSelected(); })));
-		AEWMenus::AddGroupedToolEntry("Arena", ArenaLabel, "AEWArenaRestoreMeshes",
+		AEWMenus::AddEntry(Arena, Barricades, 2, "AEWArenaRestoreMeshes",
 			LOCTEXT("RestoreMeshes", "Restore Meshes From Barricades"),
 			LOCTEXT("RestoreMeshesTip", "Remove barricade pieces from the selected meshes (all if none selected)."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::RestoreMeshesFromBarricades(); })));
-		AEWMenus::AddGroupedToolEntry("Arena", ArenaLabel, "AEWArenaFillAudience",
+		AEWMenus::AddEntry(Arena, Crowd, 0, "AEWArenaFillAudience",
 			LOCTEXT("FillAudience", "Fill Audience From Selected"),
 			LOCTEXT("FillAudienceTip", "Fill around the selected Empty Actor with crowd, facing its X arrow."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::FillAudienceFromSelected(); })));
-		AEWMenus::AddGroupedToolEntry("Arena", ArenaLabel, "AEWArenaClearAudience",
+		AEWMenus::AddEntry(Arena, Crowd, 1, "AEWArenaClearAudience",
 			LOCTEXT("ClearAudience", "Clear Generated Audience"),
 			LOCTEXT("ClearAudienceTip", "Remove generated crowd from the selection (all if none selected)."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::ClearGeneratedAudience(); })));
-		AEWMenus::AddGroupedToolEntry("Arena", ArenaLabel, "AEWArenaCameraPreview",
+		AEWMenus::AddEntry(Arena, Camera, 0, "AEWArenaCameraPreview",
 			LOCTEXT("CameraPreview", "Toggle Camera Preview"),
 			LOCTEXT("CameraPreviewTip", "Show where the gameplay camera settles. Run again to remove."),
 			FUIAction(FExecuteAction::CreateLambda([]() { UAEWArenaTools::ToggleCameraPreview(); })));
+		AEWMenus::AddDynamicSubMenu(Arena, Camera, 1, "AEWArenaCameraPreviewRow",
+			LOCTEXT("CameraRow", "Camera Preview Row"),
+			LOCTEXT("CameraRowTip", "Preview another camera table row."),
+			FNewToolMenuDelegate::CreateLambda([](UToolMenu* Menu)
+			{
+				FToolMenuSection& Section = Menu->AddSection("Rows");
+				const TArray<FName> Rows = UAEWArenaTools::CameraPreviewRows();
+				if (Rows.Num() == 0)
+				{
+					Section.AddMenuEntry("AEWNoCameraRows", LOCTEXT("NoCameraRows", "No camera table found"), FText::GetEmpty(), FSlateIcon(),
+						FUIAction(FExecuteAction(), FCanExecuteAction::CreateLambda([]() { return false; })));
+					return;
+				}
+				for (const FName Row : Rows)
+				{
+					Section.AddMenuEntry(Row, FText::FromName(Row), FText::GetEmpty(), FSlateIcon(),
+						FUIAction(FExecuteAction::CreateLambda([Row]() { UAEWArenaTools::SetCameraPreviewRow(Row); }),
+							FCanExecuteAction(),
+							FIsActionChecked::CreateLambda([Row]() { return GetDefault<UAEWArenaMakerSettings>()->CameraPreviewRow == Row; })),
+						EUserInterfaceActionType::RadioButton);
+				}
+			}));
 
 		UToolMenus* Menus = UToolMenus::Get();
-		const FString ArenaMenu = TEXT("LevelEditor.MainMenu.Window.AEWModdingTools.Arena");
+		const FString ArenaMenu = AEWMenus::MenuName(Arena).ToString();
 		for (const TCHAR* Context : { TEXT("LevelEditor.ActorContextMenu"), TEXT("LevelEditor.EmptySelectionContextMenu") })
 		{
 			if (UToolMenu* Menu = Menus->ExtendMenu(Context))
@@ -243,10 +270,6 @@ private:
 			if (!Menus->IsMenuRegistered(FName(*Child)))
 			{
 				Menus->RegisterMenu(FName(*Child), FName(*ArenaMenu));
-			}
-			if (!Menus->IsMenuRegistered(FName(*(Child + TEXT(".Overrides")))))
-			{
-				Menus->RegisterMenu(FName(*(Child + TEXT(".Overrides"))), FName(*(ArenaMenu + TEXT(".Overrides"))));
 			}
 		}
 	}

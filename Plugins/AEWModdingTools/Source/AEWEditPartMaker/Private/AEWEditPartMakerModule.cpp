@@ -67,7 +67,7 @@ private:
 	{
 		FToolMenuOwnerScoped OwnerScoped(this);
 
-		AEWMenus::AddToolEntry("OpenAEWEditPartMaker",
+		AEWMenus::AddEntry(FString(), AEWMenus::ToolsSection(), 1, "OpenAEWEditPartMaker",
 			LOCTEXT("OpenLabel", "Edit Part Maker"),
 			LOCTEXT("OpenTip", "Make new CAW parts"),
 			FUIAction(FExecuteAction::CreateLambda([]() { FGlobalTabmanager::Get()->TryInvokeTab(EditPartMakerTabName); })));
