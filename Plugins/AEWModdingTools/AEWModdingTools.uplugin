@@ -1,0 +1,24 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "AEW Modding Tools",
+	"Description": "AEW Fight Forever modding tools: ACB Editor (cue sheets), Edit Part Maker (CAW parts), Arena Maker (new arenas from imported templates or mod arenas) and editor fixes for cooked game assets.",
+	"Category": "AEW Fight Forever",
+	"CreatedBy": "",
+	"EngineVersion": "4.27.0",
+	"EnabledByDefault": true,
+	"CanContainContent": false,
+	"IsBetaVersion": true,
+	"Installed": false,
+	"Modules": [
+		{ "Name": "AEWModdingCore", "Type": "Editor", "LoadingPhase": "PostEngineInit" },
+		{ "Name": "AEWEditorFixes", "Type": "Editor", "LoadingPhase": "PostEngineInit" },
+		{ "Name": "AEWAcbEditor", "Type": "Editor", "LoadingPhase": "PostEngineInit" },
+		{ "Name": "AEWEditPartMaker", "Type": "Editor", "LoadingPhase": "PostEngineInit" },
+		{ "Name": "AEWArenaMaker", "Type": "Editor", "LoadingPhase": "PostEngineInit" }
+	],
+	"Plugins": [
+		{ "Name": "CriWare", "Enabled": true }
+	]
+}
