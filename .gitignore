@@ -10,4 +10,5 @@ Build/
 
 /*.sln
 WindowsNoEditor/
-Content/GameData/Levels/ModLevels
+/Content/GameData/Levels/ModLevels/*
+!/Content/GameData/Levels/ModLevels/.gitkeep
